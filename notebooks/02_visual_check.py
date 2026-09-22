@@ -274,9 +274,10 @@ def _(mo):
     mo.md(r"""
     ## 3 · Record the class labels
 
-    The table below is **seeded with a hypothesis, not an answer**: Thai class IDs appear to run
-    in dictionary-collation order, so `class_folder − 160` indexes the 44-consonant alphabet, and
-    `240–249` looks like the digit block `๐–๙`.
+    The table below is **seeded with a hypothesis, not an answer**: `class_folder` appears to equal
+    the decimal **TIS-620** byte value of the Thai character (equivalently, `class_folder + 0xD60`
+    is its Unicode code point). That covers the consonants `161–206` (including ฤ/ฦ), the vowel and
+    tone-mark block `207–239`, and the digit block `240–249` (`๐–๙`).
 
     That is a pattern in the numbering, not evidence about the pixels. Check each row against
     its prototype above before accepting it. Clear the `character` cell to mark a class
@@ -299,26 +300,69 @@ def _():
         ("ต", "to tao"), ("ถ", "tho thung"), ("ท", "tho thahan"), ("ธ", "tho thong"),
         ("น", "no nu"), ("บ", "bo baimai"), ("ป", "po pla"), ("ผ", "pho phung"),
         ("ฝ", "fo fa"), ("พ", "pho phan"), ("ฟ", "fo fan"), ("ภ", "pho samphao"),
-        ("ม", "mo ma"), ("ย", "yo yak"), ("ร", "ro rua"), ("ล", "lo ling"),
+        ("ม", "mo ma"), ("ย", "yo yak"), ("ร", "ro rua"),
+        ("ฤ", "ru"), ("ล", "lo ling"), ("ฦ", "rue"),
         ("ว", "wo waen"), ("ศ", "so sala"), ("ษ", "so rusi"), ("ส", "so sua"),
         ("ห", "ho hip"), ("ฬ", "lo chula"), ("อ", "o ang"), ("ฮ", "ho nokhuk"),
     ]
+    # Vowels, tone marks and other signs that fill the TIS-620 code page between the
+    # consonant block (ending 0xCE/206) and the digit block (starting 0xF0/240).
+    # None marks the four TIS-620 positions (0xDB-0xDE / 219-222) left unassigned.
+    OTHER_SIGNS = [
+        ("ฯ", "paiyannoi", "Thai Punctuation"),
+        ("ะ", "sara a", "Thai Vowel"),
+        ("ั", "mai han-akat", "Thai Vowel"),
+        ("า", "sara aa", "Thai Vowel"),
+        ("ำ", "sara am", "Thai Vowel"),
+        ("ิ", "sara i", "Thai Vowel"),
+        ("ี", "sara ii", "Thai Vowel"),
+        ("ึ", "sara ue", "Thai Vowel"),
+        ("ื", "sara uee", "Thai Vowel"),
+        ("ุ", "sara u", "Thai Vowel"),
+        ("ู", "sara uu", "Thai Vowel"),
+        ("ฺ", "phinthu", "Thai Diacritic"),
+        None, None, None, None,
+        ("฿", "baht sign", "Thai Symbol"),
+        ("เ", "sara e", "Thai Vowel"),
+        ("แ", "sara ae", "Thai Vowel"),
+        ("โ", "sara o", "Thai Vowel"),
+        ("ใ", "sara ai maimuan", "Thai Vowel"),
+        ("ไ", "sara ai maimalai", "Thai Vowel"),
+        ("ๅ", "lakkhangyao", "Thai Vowel"),
+        ("ๆ", "maiyamok", "Thai Punctuation"),
+        ("็", "maitaikhu", "Thai Diacritic"),
+        ("่", "mai ek", "Thai Tone Mark"),
+        ("้", "mai tho", "Thai Tone Mark"),
+        ("๊", "mai tri", "Thai Tone Mark"),
+        ("๋", "mai chattawa", "Thai Tone Mark"),
+        ("์", "thanthakhat", "Thai Diacritic"),
+        ("ํ", "nikhahit", "Thai Diacritic"),
+        ("๎", "yamakkan", "Thai Diacritic"),
+        ("๏", "fongman", "Thai Punctuation"),
+    ]
     DIGITS = [("๐", "sun"), ("๑", "nueng"), ("๒", "song"), ("๓", "sam"), ("๔", "si"),
               ("๕", "ha"), ("๖", "hok"), ("๗", "chet"), ("๘", "paet"), ("๙", "kao")]
-    return CONSONANTS, DIGITS
+    return CONSONANTS, OTHER_SIGNS, DIGITS
 
 
 @app.cell
-def _(CONFIGS, CONSONANTS, DIGITS, class_ids, classes, pd):
+def _(CONFIGS, CONSONANTS, OTHER_SIGNS, DIGITS, class_ids, classes, pd):
     def seed_row(fid):
-        # the collation-offset hypothesis: a suggestion to check, never an assertion
+        # the TIS-620 hypothesis: class_folder appears to equal the decimal TIS-620
+        # byte value of the character. A suggestion to check, never an assertion.
         if 161 <= fid <= 160 + len(CONSONANTS):
             ch, name = CONSONANTS[fid - 161]
-            return ch, "Thai Consonant", f"hypothesis: collation offset -> {name}"
+            return ch, "Thai Consonant", f"hypothesis: TIS-620 0x{fid:02X} -> {name}"
+        if 207 <= fid <= 206 + len(OTHER_SIGNS):
+            entry = OTHER_SIGNS[fid - 207]
+            if entry is None:
+                return "", "", f"no hypothesis: TIS-620 0x{fid:02X} is unassigned"
+            ch, name, cat = entry
+            return ch, cat, f"hypothesis: TIS-620 0x{fid:02X} -> {name}"
         if 240 <= fid <= 249:
             ch, name = DIGITS[fid - 240]
-            return ch, "Thai Digit", f"hypothesis: digit block -> {name}"
-        return "", "", "no hypothesis: outside the consonant and digit blocks"
+            return ch, "Thai Digit", f"hypothesis: TIS-620 0x{fid:02X} -> {name}"
+        return "", "", "no hypothesis: outside the TIS-620 Thai block"
 
     _existing = (pd.read_csv(CONFIGS / "class_labels.csv", keep_default_na=False)
                  if (CONFIGS / "class_labels.csv").exists() else None)

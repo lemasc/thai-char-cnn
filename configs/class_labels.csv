@@ -1,0 +1,73 @@
+class_folder,n_images,character,category,confidence,note,decided_at
+161,1934,ก,Thai Consonant,,hypothesis: TIS-620 0xA1 -> ko kai,2026-09-22T15:03:30+00:00
+162,1348,ข,Thai Consonant,,hypothesis: TIS-620 0xA2 -> kho khai,2026-09-22T15:03:30+00:00
+163,1,ฃ,Thai Consonant,,hypothesis: TIS-620 0xA3 -> kho khuat,2026-09-22T15:03:30+00:00
+164,1443,ค,Thai Consonant,,hypothesis: TIS-620 0xA4 -> kho khwai,2026-09-22T15:03:30+00:00
+167,1069,ง,Thai Consonant,,hypothesis: TIS-620 0xA7 -> ngo ngu,2026-09-22T15:03:30+00:00
+168,1201,จ,Thai Consonant,,hypothesis: TIS-620 0xA8 -> cho chan,2026-09-22T15:03:30+00:00
+169,43,ฉ,Thai Consonant,,hypothesis: TIS-620 0xA9 -> cho ching,2026-09-22T15:03:30+00:00
+170,1013,ช,Thai Consonant,,hypothesis: TIS-620 0xAA -> cho chang,2026-09-22T15:03:30+00:00
+171,295,ซ,Thai Consonant,,hypothesis: TIS-620 0xAB -> so so,2026-09-22T15:03:30+00:00
+173,113,ญ,Thai Consonant,,hypothesis: TIS-620 0xAD -> yo ying,2026-09-22T15:03:30+00:00
+175,32,ฏ,Thai Consonant,,hypothesis: TIS-620 0xAF -> to patak,2026-09-22T15:03:30+00:00
+176,118,ฐ,Thai Consonant,,hypothesis: TIS-620 0xB0 -> tho than,2026-09-22T15:03:30+00:00
+177,1,ฑ,Thai Consonant,,hypothesis: TIS-620 0xB1 -> tho nangmontho,2026-09-22T15:03:30+00:00
+178,48,ฒ,Thai Consonant,,hypothesis: TIS-620 0xB2 -> tho phuthao,2026-09-22T15:03:30+00:00
+179,292,ณ,Thai Consonant,,hypothesis: TIS-620 0xB3 -> no nen,2026-09-22T15:03:30+00:00
+180,2016,ด,Thai Consonant,,hypothesis: TIS-620 0xB4 -> do dek,2026-09-22T15:03:30+00:00
+181,1660,ต,Thai Consonant,,hypothesis: TIS-620 0xB5 -> to tao,2026-09-22T15:03:30+00:00
+182,435,ถ,Thai Consonant,,hypothesis: TIS-620 0xB6 -> tho thung,2026-09-22T15:03:30+00:00
+183,1735,ท,Thai Consonant,,hypothesis: TIS-620 0xB7 -> tho thahan,2026-09-22T15:03:30+00:00
+184,143,ธ,Thai Consonant,,hypothesis: TIS-620 0xB8 -> tho thong,2026-09-22T15:03:30+00:00
+185,4818,น,Thai Consonant,,hypothesis: TIS-620 0xB9 -> no nu,2026-09-22T15:03:30+00:00
+186,1827,บ,Thai Consonant,,hypothesis: TIS-620 0xBA -> bo baimai,2026-09-22T15:03:30+00:00
+187,1117,ป,Thai Consonant,,hypothesis: TIS-620 0xBB -> po pla,2026-09-22T15:03:30+00:00
+188,343,ผ,Thai Consonant,,hypothesis: TIS-620 0xBC -> pho phung,2026-09-22T15:03:30+00:00
+189,39,ฝ,Thai Consonant,,hypothesis: TIS-620 0xBD -> fo fa,2026-09-22T15:03:30+00:00
+190,729,พ,Thai Consonant,,hypothesis: TIS-620 0xBE -> pho phan,2026-09-22T15:03:30+00:00
+191,103,ฟ,Thai Consonant,,hypothesis: TIS-620 0xBF -> fo fan,2026-09-22T15:03:30+00:00
+192,239,ภ,Thai Consonant,,hypothesis: TIS-620 0xC0 -> pho samphao,2026-09-22T15:03:30+00:00
+193,3281,ม,Thai Consonant,,hypothesis: TIS-620 0xC1 -> mo ma,2026-09-22T15:03:30+00:00
+194,2185,ย,Thai Consonant,,hypothesis: TIS-620 0xC2 -> yo yak,2026-09-22T15:03:30+00:00
+195,4574,ร,Thai Consonant,,hypothesis: TIS-620 0xC3 -> ro rua,2026-09-22T15:03:30+00:00
+196,13,ฤ,Thai Consonant,,hypothesis: TIS-620 0xC4 -> ru,2026-09-22T15:03:30+00:00
+197,2180,ล,Thai Consonant,,hypothesis: TIS-620 0xC5 -> lo ling,2026-09-22T15:03:30+00:00
+199,1679,ว,Thai Consonant,,hypothesis: TIS-620 0xC7 -> wo waen,2026-09-22T15:03:30+00:00
+200,94,ศ,Thai Consonant,,hypothesis: TIS-620 0xC8 -> so sala,2026-09-22T15:03:30+00:00
+201,264,ษ,Thai Consonant,,hypothesis: TIS-620 0xC9 -> so rusi,2026-09-22T15:03:30+00:00
+202,1591,ส,Thai Consonant,,hypothesis: TIS-620 0xCA -> so sua,2026-09-22T15:03:30+00:00
+203,1481,ห,Thai Consonant,,hypothesis: TIS-620 0xCB -> ho hip,2026-09-22T15:03:30+00:00
+204,3,ฬ,Thai Consonant,,hypothesis: TIS-620 0xCC -> lo chula,2026-09-22T15:03:30+00:00
+205,3245,อ,Thai Consonant,,hypothesis: TIS-620 0xCD -> o ang,2026-09-22T15:03:30+00:00
+206,10,ฮ,Thai Consonant,,hypothesis: TIS-620 0xCE -> ho nokhuk,2026-09-22T15:03:30+00:00
+207,20,ฯ,Thai Punctuation,,hypothesis: TIS-620 0xCF -> paiyannoi,2026-09-22T15:03:30+00:00
+209,3688,ั,Thai Vowel,,hypothesis: TIS-620 0xD1 -> mai han-akat,2026-09-22T15:03:30+00:00
+210,4539,า,Thai Vowel,,hypothesis: TIS-620 0xD2 -> sara aa,2026-09-22T15:03:30+00:00
+212,47,ิ,Thai Vowel,,hypothesis: TIS-620 0xD4 -> sara i,2026-09-22T15:03:30+00:00
+213,143,ี,Thai Vowel,,hypothesis: TIS-620 0xD5 -> sara ii,2026-09-22T15:03:30+00:00
+214,14,ึ,Thai Vowel,,hypothesis: TIS-620 0xD6 -> sara ue,2026-09-22T15:03:30+00:00
+215,60,ื,Thai Vowel,,hypothesis: TIS-620 0xD7 -> sara uee,2026-09-22T15:03:30+00:00
+216,154,ุ,Thai Vowel,,hypothesis: TIS-620 0xD8 -> sara u,2026-09-22T15:03:30+00:00
+217,139,ู,Thai Vowel,,hypothesis: TIS-620 0xD9 -> sara uu,2026-09-22T15:03:30+00:00
+224,189,เ,Thai Vowel,,hypothesis: TIS-620 0xE0 -> sara e,2026-09-22T15:03:30+00:00
+225,21,แ,Thai Vowel,,hypothesis: TIS-620 0xE1 -> sara ae,2026-09-22T15:03:30+00:00
+226,698,โ,Thai Vowel,,hypothesis: TIS-620 0xE2 -> sara o,2026-09-22T15:03:30+00:00
+227,1080,ใ,Thai Vowel,,hypothesis: TIS-620 0xE3 -> sara ai maimuan,2026-09-22T15:03:30+00:00
+228,724,ไ,Thai Vowel,,hypothesis: TIS-620 0xE4 -> sara ai maimalai,2026-09-22T15:03:30+00:00
+229,1301,ๅ,Thai Vowel,,hypothesis: TIS-620 0xE5 -> lakkhangyao,2026-09-22T15:03:30+00:00
+230,120,ๆ,Thai Punctuation,,hypothesis: TIS-620 0xE6 -> maiyamok,2026-09-22T15:03:30+00:00
+231,118,็,Thai Diacritic,,hypothesis: TIS-620 0xE7 -> maitaikhu,2026-09-22T15:03:30+00:00
+232,315,่,Thai Tone Mark,,hypothesis: TIS-620 0xE8 -> mai ek,2026-09-22T15:03:30+00:00
+233,990,้,Thai Tone Mark,,hypothesis: TIS-620 0xE9 -> mai tho,2026-09-22T15:03:30+00:00
+234,49,๊,Thai Tone Mark,,hypothesis: TIS-620 0xEA -> mai tri,2026-09-22T15:03:30+00:00
+236,684,์,Thai Diacritic,,hypothesis: TIS-620 0xEC -> thanthakhat,2026-09-22T15:03:30+00:00
+240,81,๐,Thai Digit,,hypothesis: TIS-620 0xF0 -> sun,2026-09-22T15:03:30+00:00
+241,46,๑,Thai Digit,,hypothesis: TIS-620 0xF1 -> nueng,2026-09-22T15:03:30+00:00
+242,39,๒,Thai Digit,,hypothesis: TIS-620 0xF2 -> song,2026-09-22T15:03:30+00:00
+243,23,๓,Thai Digit,,hypothesis: TIS-620 0xF3 -> sam,2026-09-22T15:03:30+00:00
+244,16,๔,Thai Digit,,hypothesis: TIS-620 0xF4 -> si,2026-09-22T15:03:30+00:00
+245,17,๕,Thai Digit,,hypothesis: TIS-620 0xF5 -> ha,2026-09-22T15:03:30+00:00
+246,12,๖,Thai Digit,,hypothesis: TIS-620 0xF6 -> hok,2026-09-22T15:03:30+00:00
+247,4,๗,Thai Digit,,hypothesis: TIS-620 0xF7 -> chet,2026-09-22T15:03:30+00:00
+248,27,๘,Thai Digit,,hypothesis: TIS-620 0xF8 -> paet,2026-09-22T15:03:30+00:00
+249,15,๙,Thai Digit,,hypothesis: TIS-620 0xF9 -> kao,2026-09-22T15:03:30+00:00
