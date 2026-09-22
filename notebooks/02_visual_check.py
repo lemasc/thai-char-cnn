@@ -57,6 +57,7 @@ def _():
         ImageDraw,
         MANIFEST,
         RAW,
+        ROOT,
         UTC,
         datetime,
         io,
@@ -114,7 +115,19 @@ def _(canonical, classes, cross, images, mo, outliers):
 
 
 @app.cell
-def _(Image, ImageDraw, RAW, io, np):
+def _(Image, ImageDraw, RAW, ROOT, io, np):
+    from PIL import ImageFont
+
+    # PIL's default bitmap font has no Thai glyphs (renders tofu boxes), so captions with
+    # Thai characters need a bundled font that does.
+    _FONT_PATH = ROOT / "assets" / "fonts" / "sarabun" / "THSarabun.ttf"
+    _font_cache = {}
+
+    def _font(size):
+        if size not in _font_cache:
+            _font_cache[size] = ImageFont.truetype(str(_FONT_PATH), size)
+        return _font_cache[size]
+
     def load_gray(rel_path):
         with Image.open(RAW / rel_path) as im:
             return np.asarray(im.convert("L"), np.uint8)
@@ -131,19 +144,20 @@ def _(Image, ImageDraw, RAW, io, np):
                      ((cell - nw) // 2, (cell - nh) // 2))
         return canvas
 
-    def montage(items, ncol=12, cell=72, label_h=14):
+    def montage(items, ncol=12, cell=72, label_h=22):
         # items: list of (2-D uint8 array, caption)
         if not items:
             return Image.new("L", (cell, cell), 255)
         nrow = int(np.ceil(len(items) / ncol))
         sheet = Image.new("L", (ncol * cell, nrow * (cell + label_h)), 255)
         draw = ImageDraw.Draw(sheet)
+        _cap_font = _font(max(8, label_h - 4)) if label_h > 6 else None
         for k, (arr, cap) in enumerate(items):
             r, c = divmod(k, ncol)
             y = r * (cell + label_h)
             sheet.paste(fit(arr, cell), (c * cell, y))
             if cap:
-                draw.text((c * cell + 2, y + cell + 1), str(cap), fill=0)
+                draw.text((c * cell + 2, y + cell + 1), str(cap), fill=0, font=_cap_font)
         return sheet
 
     def png(img, scale=1):
@@ -199,10 +213,13 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(class_ids, classes, mo, montage, png, prototypes):
+def _(class_char, class_ids, classes, mo, montage, png, prototypes):
     _n = dict(zip(classes.class_folder, classes.n_images_dedup, strict=True))
-    _items = [(prototypes[f], f"{f} n={_n[f]}") for f in class_ids]
-    mo.image(png(montage(_items, ncol=12, cell=80), scale=1), width="100%",
+    def _cap(f):
+        ch = class_char.get(f, "")
+        return f"{f} {ch} n={_n[f]}" if ch else f"{f} n={_n[f]}"
+    _items = [(prototypes[f], _cap(f)) for f in class_ids]
+    mo.image(png(montage(_items, ncol=12, cell=80)), width="100%",
              caption="Mean-image prototype per class (sha-deduped, seed 42)")
     return
 
@@ -219,9 +236,12 @@ def _(mo):
 
 
 @app.cell
-def _(class_ids, mo):
+def _(class_char, class_ids, mo):
+    def _opt(f):
+        ch = class_char.get(f, "")
+        return f"{f} {ch}" if ch else str(f)
     class_pick = mo.ui.dropdown(
-        options={str(f): f for f in class_ids}, value=str(class_ids[0]), label="class folder")
+        options={_opt(f): f for f in class_ids}, value=_opt(class_ids[0]), label="class folder")
     grid_n = mo.ui.slider(8, 96, value=36, step=4, label="samples shown")
     mo.hstack([class_pick, grid_n], justify="start", gap=2)
     return class_pick, grid_n
@@ -231,6 +251,7 @@ def _(class_ids, mo):
 def _(
     Image,
     canonical,
+    class_char,
     class_pick,
     classes,
     grid_n,
@@ -242,6 +263,7 @@ def _(
     prototypes,
 ):
     _fid = class_pick.value
+    _ch = class_char.get(_fid, "")
     _paths = sorted(canonical.loc[canonical.class_folder == _fid, "path"])
     _rng = np.random.default_rng(42 + _fid)
     _sel = [_paths[i] for i in _rng.permutation(len(_paths))[: grid_n.value]]
@@ -250,10 +272,10 @@ def _(
     mo.vstack([
         mo.hstack([
             mo.image(png(Image.fromarray(prototypes[_fid]), scale=3),
-                     caption=f"prototype · class {_fid}"),
+                     caption=f"prototype · class {_fid}" + (f" · {_ch}" if _ch else "")),
             mo.md(
                 f"""
-                **class {_fid}** — {int(_row.n_images_dedup):,} canonical images
+                **class {_fid}**{f" — {_ch}" if _ch else ""} — {int(_row.n_images_dedup):,} canonical images
                 ({int(_row.n_images_raw):,} raw, {int(_row.n_redundant_copies):,} redundant)
 
                 size: {int(_row.width_min)}–{int(_row.width_max)} × {int(_row.height_min)}–{int(_row.height_max)} px ·
@@ -342,11 +364,11 @@ def _():
     ]
     DIGITS = [("๐", "sun"), ("๑", "nueng"), ("๒", "song"), ("๓", "sam"), ("๔", "si"),
               ("๕", "ha"), ("๖", "hok"), ("๗", "chet"), ("๘", "paet"), ("๙", "kao")]
-    return CONSONANTS, OTHER_SIGNS, DIGITS
+    return CONSONANTS, DIGITS, OTHER_SIGNS
 
 
 @app.cell
-def _(CONFIGS, CONSONANTS, OTHER_SIGNS, DIGITS, class_ids, classes, pd):
+def _(CONFIGS, CONSONANTS, DIGITS, OTHER_SIGNS, class_ids, classes, pd):
     def seed_row(fid):
         # the TIS-620 hypothesis: class_folder appears to equal the decimal TIS-620
         # byte value of the character. A suggestion to check, never an assertion.
@@ -381,6 +403,15 @@ def _(CONFIGS, CONSONANTS, OTHER_SIGNS, DIGITS, class_ids, classes, pd):
                           category=_cat, confidence=_conf, note=_note))
     label_seed = pd.DataFrame(_rows)
     return (label_seed,)
+
+
+@app.cell
+def _(label_seed):
+    # Best-known character per class, for annotating ids elsewhere in this notebook: the
+    # saved decision if one exists, otherwise the seeded TIS-620 hypothesis. Not proof —
+    # still check it against the prototype in §1/§2 before trusting a caption.
+    class_char = dict(zip(label_seed.class_folder, label_seed.character.fillna("")))
+    return (class_char,)
 
 
 @app.cell
@@ -490,7 +521,7 @@ def _(mo, shown):
 
 
 @app.cell(hide_code=True)
-def _(Image, images, load_gray, mo, np, pair_page, png, shown):
+def _(Image, class_char, images, load_gray, mo, np, pair_page, png, shown):
     def pair_strip(row):
         a, b = images.iloc[int(row.i)], images.iloc[int(row.j)]
         ga, gb = load_gray(a.path), load_gray(b.path)
@@ -505,9 +536,11 @@ def _(Image, images, load_gray, mo, np, pair_page, png, shown):
         strip = Image.fromarray(np.hstack([_pad(ga), gap, _pad(gb)]))
         hd = "-" if np.isnan(row.hamming) else f"{int(row.hamming)}"
         rd = "-" if np.isnan(row.rms) else f"{row.rms:.2f}"
+        _ca, _cb = class_char.get(a.class_folder, ""), class_char.get(b.class_folder, "")
         return mo.vstack([
             mo.image(png(strip, scale=4)),
-            mo.md(f"`{a.class_folder}` vs `{b.class_folder}` · hamming **{hd}** · rms **{rd}**"),
+            mo.md(f"`{a.class_folder}` {_ca} vs `{b.class_folder}` {_cb} · "
+                  f"hamming **{hd}** · rms **{rd}**"),
         ])
 
     _page = shown.iloc[pair_page.value * 8 : pair_page.value * 8 + 8]
@@ -539,13 +572,17 @@ def _(cross, mo):
 
 
 @app.cell(hide_code=True)
-def _(cross, load_gray, mo, montage, png, xpick):
+def _(class_char, cross, load_gray, mo, montage, png, xpick):
     _g = cross[cross.sha_group_id == xpick.value]
+    def _cap(f):
+        ch = class_char.get(f, "")
+        return f"cls {f} {ch}" if ch else f"cls {f}"
+    _table = _g[["path", "class_folder"]].assign(character=_g.class_folder.map(class_char))
     mo.vstack([
-        mo.image(png(montage([(load_gray(r.path), f"cls {r.class_folder}") for r in _g.itertuples()],
+        mo.image(png(montage([(load_gray(r.path), _cap(r.class_folder)) for r in _g.itertuples()],
                              ncol=6, cell=96), scale=2),
                  caption=f"group {xpick.value} · classes {_g.class_folder.unique().tolist()}"),
-        mo.ui.table(_g[["path", "class_folder"]], selection=None),
+        mo.ui.table(_table, selection=None),
     ])
     return
 
@@ -619,16 +656,19 @@ def _(mo, outliers):
 
 
 @app.cell(hide_code=True)
-def _(load_gray, mo, montage, out_page, out_reason, outliers, png):
+def _(class_char, load_gray, mo, montage, out_page, out_reason, outliers, png):
     _sub = (outliers if out_reason.value == "(all)"
             else outliers[outliers.reasons.str.contains(out_reason.value, regex=False)])
     _pg = _sub.iloc[out_page.value * 48 : out_page.value * 48 + 48]
+    def _cap(f):
+        ch = class_char.get(f, "")
+        return f"{f} {ch}" if ch else str(f)
     mo.vstack([
         mo.md(f"**{len(_sub):,}** images flagged" +
               ("" if out_reason.value == "(all)" else f" for `{out_reason.value}`") +
               f" · showing {len(_pg)}"),
-        mo.image(png(montage([(load_gray(r.path), f"{r.class_folder}") for r in _pg.itertuples()],
-                             ncol=12, cell=72), scale=1), width="100%")
+        mo.image(png(montage([(load_gray(r.path), _cap(r.class_folder)) for r in _pg.itertuples()],
+                             ncol=12, cell=72), scale=2), width="100%")
         if len(_pg) else mo.md("*Nothing on this page.*"),
     ])
     return
