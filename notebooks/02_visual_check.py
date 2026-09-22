@@ -144,8 +144,9 @@ def _(Image, ImageDraw, RAW, ROOT, io, np):
                      ((cell - nw) // 2, (cell - nh) // 2))
         return canvas
 
-    def montage(items, ncol=12, cell=72, label_h=22):
+    def montage(items, ncol=12, cell=72, label_h=22, scale=1):
         # items: list of (2-D uint8 array, caption)
+        cell, label_h = cell * scale, label_h * scale
         if not items:
             return Image.new("L", (cell, cell), 255)
         nrow = int(np.ceil(len(items) / ncol))
@@ -157,7 +158,7 @@ def _(Image, ImageDraw, RAW, ROOT, io, np):
             y = r * (cell + label_h)
             sheet.paste(fit(arr, cell), (c * cell, y))
             if cap:
-                draw.text((c * cell + 2, y + cell + 1), str(cap), fill=0, font=_cap_font)
+                draw.text((c * cell + 2 * scale, y + cell + scale), str(cap), fill=0, font=_cap_font)
         return sheet
 
     def png(img, scale=1):
@@ -219,7 +220,7 @@ def _(class_char, class_ids, classes, mo, montage, png, prototypes):
         ch = class_char.get(f, "")
         return f"{f} {ch} n={_n[f]}" if ch else f"{f} n={_n[f]}"
     _items = [(prototypes[f], _cap(f)) for f in class_ids]
-    mo.image(png(montage(_items, ncol=12, cell=80)), width="100%",
+    mo.image(png(montage(_items, ncol=12, cell=80, scale=2)), width="100%",
              caption="Mean-image prototype per class (sha-deduped, seed 42)")
     return
 
@@ -580,7 +581,7 @@ def _(class_char, cross, load_gray, mo, montage, png, xpick):
     _table = _g[["path", "class_folder"]].assign(character=_g.class_folder.map(class_char))
     mo.vstack([
         mo.image(png(montage([(load_gray(r.path), _cap(r.class_folder)) for r in _g.itertuples()],
-                             ncol=6, cell=96), scale=2),
+                             ncol=6, cell=96, scale=2)),
                  caption=f"group {xpick.value} · classes {_g.class_folder.unique().tolist()}"),
         mo.ui.table(_table, selection=None),
     ])
@@ -668,7 +669,8 @@ def _(class_char, load_gray, mo, montage, out_page, out_reason, outliers, png):
               ("" if out_reason.value == "(all)" else f" for `{out_reason.value}`") +
               f" · showing {len(_pg)}"),
         mo.image(png(montage([(load_gray(r.path), _cap(r.class_folder)) for r in _pg.itertuples()],
-                             ncol=12, cell=72), scale=2), width="100%")
+                             ncol=12, cell=72, scale=2)),
+                 width="100%")
         if len(_pg) else mo.md("*Nothing on this page.*"),
     ])
     return
