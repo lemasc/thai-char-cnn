@@ -1,0 +1,59 @@
+{
+  "dataset": "baseline",
+  "generated_at": "2026-09-22T10:14:01+00:00",
+  "versions": {
+    "python": "3.12.3",
+    "numpy": "2.5.3",
+    "pandas": "3.0.6",
+    "pillow": "12.3.0",
+    "torch": "2.14.0+cu126",
+    "device": "cuda"
+  },
+  "config": {
+    "random_state": 42,
+    "pixel_grid": 16,
+    "phash_pair_cut": 4,
+    "pixel_pair_cut": 32.0,
+    "outlier_z": 3.5
+  },
+  "counts": {
+    "files": 62711,
+    "images": 62707,
+    "non_images": 4,
+    "classes": 72,
+    "distinct_sha256": 60128,
+    "redundant_copies": 2579,
+    "cross_class_dup_images": 23,
+    "outliers": 5978,
+    "pairs_phash": 1499407,
+    "pairs_pixel": 1962683
+  },
+  "timings_s": {
+    "scan_s": 0.1,
+    "phash_sweep_s": 32.2,
+    "pixel_sweep_s": 1.7,
+    "pair_tables_s": 11.3
+  },
+  "checks": {
+    "every discovered image was scanned": "PASS",
+    "all images readable": "PASS",
+    "paths unique": "PASS",
+    "sha256 well-formed": "PASS",
+    "phash well-formed": "PASS",
+    "every image sits in a numeric class folder": "PASS",
+    "no null geometry": "PASS",
+    "phash sweep total reconciles": "PASS",
+    "class counts sum to image total": "PASS",
+    "dedup counts reconcile": "PASS",
+    "redundant copies reconcile": "PASS",
+    "one canonical per sha group": "PASS",
+    "file inventory reconciles": "PASS",
+    "manifest paths unique": "PASS",
+    "pair indices in range": "PASS",
+    "phash pair table matches its sweep": "PASS",
+    "pixel pair table matches its sweep": "PASS",
+    "pair tables are upper-triangular": "PASS",
+    "cross-class findings match manifest flag": "PASS",
+    "raw/ untouched": "PASS"
+  }
+}

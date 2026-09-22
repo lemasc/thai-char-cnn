@@ -1,0 +1,594 @@
+# Visual check — the human half of the dataset audit.
+#
+#   uv run marimo edit notebooks/02_visual_check.py
+#
+# Reads the manifest written by 01_dataset_audit.ipynb. Writes only to configs/.
+
+import marimo
+
+__generated_with = "0.24.2"
+app = marimo.App(width="medium")
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Visual check
+
+    The audit notebook measured everything that can be measured. What is left needs eyes:
+
+    1. **What character is each class?** — the manifest has bare folder IDs by design.
+    2. **How near is "the same image"?** — §10 of the audit computed two near-duplicate
+       signals exhaustively and deliberately chose no threshold.
+    3. **Which label wins** when one image carries two?
+    4. **Is an outlier actually wrong**, or merely unusual?
+
+    Exact (byte-identical) duplicates were already settled arithmetically, so this notebook
+    shows one canonical copy of each and you never have to think about them.
+
+    > This notebook writes **only** to `configs/`. It never touches `raw/` or the manifest.
+    """)
+    return
+
+
+@app.cell
+def _():
+    import io
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    import marimo as mo
+    import numpy as np
+    import pandas as pd
+    from PIL import Image, ImageDraw
+
+    _here = Path(__file__).resolve().parent
+    ROOT = _here.parent
+    DATASET = "baseline"
+    RAW = ROOT / "data" / DATASET / "raw"
+    MANIFEST = ROOT / "data" / DATASET / "manifest"
+    CACHE = ROOT / "data" / DATASET / "cache"
+    CONFIGS = ROOT / "configs"
+    CONFIGS.mkdir(exist_ok=True)
+    return (
+        CACHE,
+        CONFIGS,
+        Image,
+        ImageDraw,
+        MANIFEST,
+        RAW,
+        UTC,
+        datetime,
+        io,
+        mo,
+        np,
+        pd,
+    )
+
+
+@app.cell
+def _(MANIFEST, pd):
+    images = pd.read_csv(MANIFEST / "images.csv", keep_default_na=False, na_values=[""])
+    classes = pd.read_csv(MANIFEST / "classes.csv")
+    cross = pd.read_csv(MANIFEST / "findings_cross_class_exact.csv")
+    outliers = pd.read_csv(MANIFEST / "findings_outliers.csv")
+    # Pair tables are regenerable and not tracked in git, so they may be absent on a fresh
+    # clone. Fall back to empty frames -- section 4 then explains itself instead of crashing.
+    def _load_pairs(name, cols):
+        f = MANIFEST / "pairs" / f"{name}.csv.gz"
+        return pd.read_csv(f) if f.exists() else pd.DataFrame({c: [] for c in cols})
+
+    pairs_phash = _load_pairs("pairs_phash", ["i", "j", "hamming"])
+    pairs_pixel = _load_pairs("pairs_pixel", ["i", "j", "rms"])
+    pairs_available = (MANIFEST / "pairs" / "pairs_pixel.csv.gz").exists()
+
+    canonical = images[images.is_sha_canonical].reset_index(drop=True)
+    class_ids = sorted(classes.class_folder.tolist())
+    return (
+        canonical,
+        class_ids,
+        classes,
+        cross,
+        images,
+        outliers,
+        pairs_available,
+        pairs_phash,
+        pairs_pixel,
+    )
+
+
+@app.cell(hide_code=True)
+def _(canonical, classes, cross, images, mo, outliers):
+    mo.hstack(
+        [
+            mo.stat(f"{len(images):,}", label="images"),
+            mo.stat(f"{len(canonical):,}", label="canonical (exact dups collapsed)"),
+            mo.stat(f"{len(classes)}", label="classes"),
+            mo.stat(f"{cross.sha_group_id.nunique()}", label="cross-class dup groups"),
+            mo.stat(f"{len(outliers):,}", label="outliers queued"),
+        ],
+        justify="start",
+        gap=2,
+    )
+    return
+
+
+@app.cell
+def _(Image, ImageDraw, RAW, io, np):
+    def load_gray(rel_path):
+        with Image.open(RAW / rel_path) as im:
+            return np.asarray(im.convert("L"), np.uint8)
+
+    def fit(arr, cell, pad=4):
+        # scale a glyph into a square cell, preserving aspect, padded with its own background
+        h, w = arr.shape
+        inner = cell - 2 * pad
+        s = min(inner / w, inner / h)
+        nw, nh = max(1, round(w * s)), max(1, round(h * s))
+        bg = int(np.median(np.concatenate([arr[0, :], arr[-1, :], arr[:, 0], arr[:, -1]])))
+        canvas = Image.new("L", (cell, cell), bg)
+        canvas.paste(Image.fromarray(arr).resize((nw, nh), Image.Resampling.LANCZOS),
+                     ((cell - nw) // 2, (cell - nh) // 2))
+        return canvas
+
+    def montage(items, ncol=12, cell=72, label_h=14):
+        # items: list of (2-D uint8 array, caption)
+        if not items:
+            return Image.new("L", (cell, cell), 255)
+        nrow = int(np.ceil(len(items) / ncol))
+        sheet = Image.new("L", (ncol * cell, nrow * (cell + label_h)), 255)
+        draw = ImageDraw.Draw(sheet)
+        for k, (arr, cap) in enumerate(items):
+            r, c = divmod(k, ncol)
+            y = r * (cell + label_h)
+            sheet.paste(fit(arr, cell), (c * cell, y))
+            if cap:
+                draw.text((c * cell + 2, y + cell + 1), str(cap), fill=0)
+        return sheet
+
+    def png(img, scale=1):
+        if scale != 1:
+            img = img.resize((img.width * scale, img.height * scale), Image.Resampling.NEAREST)
+        buf = io.BytesIO()
+        img.convert("L").save(buf, "PNG")
+        return buf.getvalue()
+
+    return load_gray, montage, png
+
+
+@app.cell
+def _(CACHE, canonical, class_ids, load_gray, np):
+    # Mean-image prototype per class. Averaging cancels stroke noise and shows the canonical glyph.
+    # Cached: recomputing loads ~10k images and would stall every reactive re-run.
+    PROTO_N, PROTO_S = 150, 48
+    # parameters are in the filename so changing them cannot silently reuse a stale cache
+    _cache = CACHE / f"prototypes_n{PROTO_N}_s{PROTO_S}.npz"
+
+    if _cache.exists():
+        _z = np.load(_cache)
+        prototypes = {int(k): _z[k] for k in _z.files}
+    else:
+        prototypes = {}
+        for _fid in class_ids:
+            _paths = sorted(canonical.loc[canonical.class_folder == _fid, "path"])
+            _rng = np.random.default_rng(42 + _fid)
+            if len(_paths) > PROTO_N:
+                _paths = [_paths[i] for i in _rng.permutation(len(_paths))[:PROTO_N]]
+            _acc = np.zeros((PROTO_S, PROTO_S), np.float64)
+            for _p in _paths:
+                from PIL import Image as _I
+                _acc += np.asarray(
+                    _I.fromarray(load_gray(_p)).resize((PROTO_S, PROTO_S), _I.Resampling.BILINEAR),
+                    np.float64)
+            _a = _acc / max(1, len(_paths))
+            _a = (_a - _a.min()) / max(1e-6, _a.max() - _a.min()) * 255
+            prototypes[_fid] = _a.astype(np.uint8)
+        np.savez_compressed(_cache, **{str(k): v for k, v in prototypes.items()})
+    return (prototypes,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 1 · Every class at a glance
+
+    Mean image per class, contrast-stretched. Averaging up to 150 samples cancels individual
+    handwriting and leaves the canonical glyph — this is the primary evidence for §3.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(class_ids, classes, mo, montage, png, prototypes):
+    _n = dict(zip(classes.class_folder, classes.n_images_dedup, strict=True))
+    _items = [(prototypes[f], f"{f} n={_n[f]}") for f in class_ids]
+    mo.image(png(montage(_items, ncol=12, cell=80), scale=1), width="100%",
+             caption="Mean-image prototype per class (sha-deduped, seed 42)")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 2 · Class browser
+
+    A prototype hides within-class variation; the random grid shows it. Look here for mislabels
+    and for classes that are visually two different things.
+    """)
+    return
+
+
+@app.cell
+def _(class_ids, mo):
+    class_pick = mo.ui.dropdown(
+        options={str(f): f for f in class_ids}, value=str(class_ids[0]), label="class folder")
+    grid_n = mo.ui.slider(8, 96, value=36, step=4, label="samples shown")
+    mo.hstack([class_pick, grid_n], justify="start", gap=2)
+    return class_pick, grid_n
+
+
+@app.cell(hide_code=True)
+def _(
+    Image,
+    canonical,
+    class_pick,
+    classes,
+    grid_n,
+    load_gray,
+    mo,
+    montage,
+    np,
+    png,
+    prototypes,
+):
+    _fid = class_pick.value
+    _paths = sorted(canonical.loc[canonical.class_folder == _fid, "path"])
+    _rng = np.random.default_rng(42 + _fid)
+    _sel = [_paths[i] for i in _rng.permutation(len(_paths))[: grid_n.value]]
+    _row = classes[classes.class_folder == _fid].iloc[0]
+
+    mo.vstack([
+        mo.hstack([
+            mo.image(png(Image.fromarray(prototypes[_fid]), scale=3),
+                     caption=f"prototype · class {_fid}"),
+            mo.md(
+                f"""
+                **class {_fid}** — {int(_row.n_images_dedup):,} canonical images
+                ({int(_row.n_images_raw):,} raw, {int(_row.n_redundant_copies):,} redundant)
+
+                size: {int(_row.width_min)}–{int(_row.width_max)} × {int(_row.height_min)}–{int(_row.height_max)} px ·
+                brightness {_row.brightness_mean:.0f} · contrast {_row.contrast_mean:.0f}
+
+                cross-class duplicate images: **{int(_row.n_cross_class_dup)}**
+                """
+            ),
+        ], justify="start", gap=2),
+        mo.image(png(montage([(load_gray(p), "") for p in _sel], ncol=12, cell=64, label_h=2)),
+                 width="100%", caption=f"{len(_sel)} random samples, seed 42"),
+    ])
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 3 · Record the class labels
+
+    The table below is **seeded with a hypothesis, not an answer**: Thai class IDs appear to run
+    in dictionary-collation order, so `class_folder − 160` indexes the 44-consonant alphabet, and
+    `240–249` looks like the digit block `๐–๙`.
+
+    That is a pattern in the numbering, not evidence about the pixels. Check each row against
+    its prototype above before accepting it. Clear the `character` cell to mark a class
+    undecided — an empty cell means *unknown*, and unknown is a legitimate answer.
+
+    Edit, then press **Save**. Writes `configs/class_labels.csv`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    # Canonical Thai reference data (domain knowledge, not a claim about this dataset).
+    CONSONANTS = [
+        ("ก", "ko kai"), ("ข", "kho khai"), ("ฃ", "kho khuat"), ("ค", "kho khwai"),
+        ("ฅ", "kho khon"), ("ฆ", "kho rakhang"), ("ง", "ngo ngu"), ("จ", "cho chan"),
+        ("ฉ", "cho ching"), ("ช", "cho chang"), ("ซ", "so so"), ("ฌ", "cho choe"),
+        ("ญ", "yo ying"), ("ฎ", "do chada"), ("ฏ", "to patak"), ("ฐ", "tho than"),
+        ("ฑ", "tho nangmontho"), ("ฒ", "tho phuthao"), ("ณ", "no nen"), ("ด", "do dek"),
+        ("ต", "to tao"), ("ถ", "tho thung"), ("ท", "tho thahan"), ("ธ", "tho thong"),
+        ("น", "no nu"), ("บ", "bo baimai"), ("ป", "po pla"), ("ผ", "pho phung"),
+        ("ฝ", "fo fa"), ("พ", "pho phan"), ("ฟ", "fo fan"), ("ภ", "pho samphao"),
+        ("ม", "mo ma"), ("ย", "yo yak"), ("ร", "ro rua"), ("ล", "lo ling"),
+        ("ว", "wo waen"), ("ศ", "so sala"), ("ษ", "so rusi"), ("ส", "so sua"),
+        ("ห", "ho hip"), ("ฬ", "lo chula"), ("อ", "o ang"), ("ฮ", "ho nokhuk"),
+    ]
+    DIGITS = [("๐", "sun"), ("๑", "nueng"), ("๒", "song"), ("๓", "sam"), ("๔", "si"),
+              ("๕", "ha"), ("๖", "hok"), ("๗", "chet"), ("๘", "paet"), ("๙", "kao")]
+    return CONSONANTS, DIGITS
+
+
+@app.cell
+def _(CONFIGS, CONSONANTS, DIGITS, class_ids, classes, pd):
+    def seed_row(fid):
+        # the collation-offset hypothesis: a suggestion to check, never an assertion
+        if 161 <= fid <= 160 + len(CONSONANTS):
+            ch, name = CONSONANTS[fid - 161]
+            return ch, "Thai Consonant", f"hypothesis: collation offset -> {name}"
+        if 240 <= fid <= 249:
+            ch, name = DIGITS[fid - 240]
+            return ch, "Thai Digit", f"hypothesis: digit block -> {name}"
+        return "", "", "no hypothesis: outside the consonant and digit blocks"
+
+    _existing = (pd.read_csv(CONFIGS / "class_labels.csv", keep_default_na=False)
+                 if (CONFIGS / "class_labels.csv").exists() else None)
+    _n = dict(zip(classes.class_folder, classes.n_images_dedup, strict=True))
+
+    _rows = []
+    for _f in class_ids:
+        _ch, _cat, _note = seed_row(_f)
+        if _existing is not None and _f in set(_existing.class_folder):
+            _p = _existing[_existing.class_folder == _f].iloc[0]
+            _ch, _cat, _note = _p.character, _p.category, _p.note
+            _conf = _p.confidence
+        else:
+            _conf = ""
+        _rows.append(dict(class_folder=_f, n_images=_n[_f], character=_ch,
+                          category=_cat, confidence=_conf, note=_note))
+    label_seed = pd.DataFrame(_rows)
+    return (label_seed,)
+
+
+@app.cell
+def _(label_seed, mo):
+    label_editor = mo.ui.data_editor(label_seed, label="class labels",
+                                     editable_columns=["character", "category", "confidence", "note"])
+    label_editor
+    return (label_editor,)
+
+
+@app.cell
+def _(mo):
+    save_labels = mo.ui.button(label="Save class labels", value=0, on_click=lambda v: v + 1)
+    save_labels
+    return (save_labels,)
+
+
+@app.cell(hide_code=True)
+def _(CONFIGS, UTC, datetime, label_editor, mo, pd, save_labels):
+    if save_labels.value:
+        _df = pd.DataFrame(label_editor.value).copy()
+        _df["decided_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+        _df.to_csv(CONFIGS / "class_labels.csv", index=False)
+        _decided = int((_df.character.astype(str).str.strip() != "").sum())
+        _out = mo.md(f"Saved **{len(_df)}** rows to `configs/class_labels.csv` — "
+                     f"{_decided} with a character, {len(_df) - _decided} left undecided.")
+    else:
+        _out = mo.md("*Not saved yet.*")
+    _out
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 4 · Near-duplicate threshold
+
+    The audit computed both signals over all 1.97 billion pairs and chose no cut. Choose it here,
+    by looking.
+
+    - **pHash Hamming** — the prior pipeline's signal. Note it only moves in steps of 2: pHash
+      sets bits against the median of 64 coefficients, so every hash has exactly 32 bits set and
+      all pairwise distances are even. A threshold of 1 accepts exactly what 0 accepts.
+    - **Pixel RMS** — mean gray-level difference on a common 16×16 grid. RMS 4 means the two
+      images differ by 4 gray levels per pixel on average.
+
+    The pair that matters is the one where the two signals **disagree**. Look at those.
+    """)
+    return
+
+
+@app.cell
+def _(mo, pairs_available, pairs_phash, pairs_pixel):
+    pairs = pairs_phash.merge(pairs_pixel, on=["i", "j"], how="outer")
+    missing_pairs = None if pairs_available else mo.callout(
+        mo.md(
+            """
+            **The near-duplicate pair tables are not on disk.**
+
+            They are ~14 MB of regenerable data, so they are not tracked in git. Run
+            `notebooks/01_dataset_audit.ipynb` once (about 75 seconds) and this section will
+            populate. Everything else on this page works without them.
+            """
+        ),
+        kind="warn",
+    )
+    missing_pairs
+    return (pairs,)
+
+
+@app.cell
+def _(mo):
+    t_phash = mo.ui.slider(0, 4, value=0, step=2, label="pHash Hamming ≤")
+    t_pixel = mo.ui.slider(0.0, 32.0, value=4.0, step=0.5, label="pixel RMS ≤")
+    pair_view = mo.ui.radio(
+        options=["both agree", "only pHash", "only pixel"], value="only pHash",
+        label="show pairs where", inline=True)
+    mo.vstack([mo.hstack([t_phash, t_pixel], justify="start", gap=2), pair_view])
+    return pair_view, t_phash, t_pixel
+
+
+@app.cell(hide_code=True)
+def _(mo, pair_view, pairs, t_phash, t_pixel):
+    _ph = pairs.hamming.le(t_phash.value).fillna(False)
+    _px = pairs.rms.le(t_pixel.value).fillna(False)
+    sel = {"both agree": _ph & _px, "only pHash": _ph & ~_px, "only pixel": _px & ~_ph}[pair_view.value]
+    shown = pairs[sel].sort_values("rms", na_position="last").reset_index(drop=True)
+
+    mo.vstack([
+        mo.hstack([
+            mo.stat(f"{int((_ph & _px).sum()):,}", label="both agree"),
+            mo.stat(f"{int((_ph & ~_px).sum()):,}", label="only pHash"),
+            mo.stat(f"{int((_px & ~_ph).sum()):,}", label="only pixel"),
+            mo.stat(f"{int((_ph | _px).sum()):,}", label="union"),
+        ], justify="start", gap=2),
+        mo.md(f"**{len(shown):,}** pairs in the selected set."),
+    ])
+    return (shown,)
+
+
+@app.cell
+def _(mo, shown):
+    pair_page = mo.ui.slider(0, max(1, (len(shown) - 1) // 8), value=0, step=1,
+                             label=f"page of 8 (of {max(1, -(-len(shown)//8))})")
+    pair_page
+    return (pair_page,)
+
+
+@app.cell(hide_code=True)
+def _(Image, images, load_gray, mo, np, pair_page, png, shown):
+    def pair_strip(row):
+        a, b = images.iloc[int(row.i)], images.iloc[int(row.j)]
+        ga, gb = load_gray(a.path), load_gray(b.path)
+        h = max(ga.shape[0], gb.shape[0], 24)
+
+        def _pad(g):
+            out = np.full((h, g.shape[1]), 255, np.uint8)
+            out[: g.shape[0]] = g
+            return out
+
+        gap = np.full((h, 6), 128, np.uint8)
+        strip = Image.fromarray(np.hstack([_pad(ga), gap, _pad(gb)]))
+        hd = "-" if np.isnan(row.hamming) else f"{int(row.hamming)}"
+        rd = "-" if np.isnan(row.rms) else f"{row.rms:.2f}"
+        return mo.vstack([
+            mo.image(png(strip, scale=4)),
+            mo.md(f"`{a.class_folder}` vs `{b.class_folder}` · hamming **{hd}** · rms **{rd}**"),
+        ])
+
+    _page = shown.iloc[pair_page.value * 8 : pair_page.value * 8 + 8]
+    mo.vstack([pair_strip(r) for r in _page.itertuples()]) if len(_page) else mo.md("*No pairs.*")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 5 · Cross-class exact duplicates
+
+    Byte-identical images sitting in two different class folders. One of the two labels is
+    wrong, and no amount of arithmetic can say which — the pixels are the same pixels.
+
+    Record a ruling per group: which class folder is correct, or `hold` if the glyph is genuinely
+    ambiguous. Writes `configs/cross_class_rulings.csv`.
+    """)
+    return
+
+
+@app.cell
+def _(cross, mo):
+    xgroups = sorted(cross.sha_group_id.unique())
+    xpick = mo.ui.dropdown(options={str(g): g for g in xgroups}, value=str(xgroups[0]),
+                           label="duplicate group")
+    xpick
+    return xgroups, xpick
+
+
+@app.cell(hide_code=True)
+def _(cross, load_gray, mo, montage, png, xpick):
+    _g = cross[cross.sha_group_id == xpick.value]
+    mo.vstack([
+        mo.image(png(montage([(load_gray(r.path), f"cls {r.class_folder}") for r in _g.itertuples()],
+                             ncol=6, cell=96), scale=2),
+                 caption=f"group {xpick.value} · classes {_g.class_folder.unique().tolist()}"),
+        mo.ui.table(_g[["path", "class_folder"]], selection=None),
+    ])
+    return
+
+
+@app.cell
+def _(CONFIGS, cross, pd, xgroups):
+    _existing = (pd.read_csv(CONFIGS / "cross_class_rulings.csv", keep_default_na=False)
+                 if (CONFIGS / "cross_class_rulings.csv").exists() else None)
+    _rows = []
+    for _g in xgroups:
+        _sub = cross[cross.sha_group_id == _g]
+        _prev = (_existing[_existing.sha_group_id == _g].iloc[0]
+                 if _existing is not None and _g in set(_existing.sha_group_id) else None)
+        _rows.append(dict(
+            sha_group_id=_g,
+            classes=",".join(map(str, sorted(_sub.class_folder.unique()))),
+            n_images=len(_sub),
+            correct_class=("" if _prev is None else _prev.correct_class),
+            ruling=("" if _prev is None else _prev.ruling),
+            note=("" if _prev is None else _prev.note)))
+    ruling_seed = pd.DataFrame(_rows)
+    return (ruling_seed,)
+
+
+@app.cell
+def _(mo, ruling_seed):
+    ruling_editor = mo.ui.data_editor(ruling_seed, label="cross-class rulings",
+                                      editable_columns=["correct_class", "ruling", "note"])
+    ruling_editor
+    return (ruling_editor,)
+
+
+@app.cell
+def _(mo):
+    save_rulings = mo.ui.button(label="Save rulings", value=0, on_click=lambda v: v + 1)
+    save_rulings
+    return (save_rulings,)
+
+
+@app.cell(hide_code=True)
+def _(CONFIGS, UTC, datetime, mo, pd, ruling_editor, save_rulings):
+    if save_rulings.value:
+        _df = pd.DataFrame(ruling_editor.value).copy()
+        _df["decided_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+        _df.to_csv(CONFIGS / "cross_class_rulings.csv", index=False)
+        _o = mo.md(f"Saved **{len(_df)}** rulings to `configs/cross_class_rulings.csv`.")
+    else:
+        _o = mo.md("*Not saved yet.*")
+    _o
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 6 · Outliers
+
+    Flagged by robust z-score on width, height, aspect, file size and brightness. An outlier is
+    *unusual*, not *wrong* — that is what this view is for.
+    """)
+    return
+
+
+@app.cell
+def _(mo, outliers):
+    _reasons = sorted({r.split("(")[0] for rs in outliers.reasons for r in rs.split("; ")})
+    out_reason = mo.ui.dropdown(options=["(all)"] + _reasons, value="(all)", label="reason")
+    out_page = mo.ui.slider(0, 40, value=0, step=1, label="page of 48")
+    mo.hstack([out_reason, out_page], justify="start", gap=2)
+    return out_page, out_reason
+
+
+@app.cell(hide_code=True)
+def _(load_gray, mo, montage, out_page, out_reason, outliers, png):
+    _sub = (outliers if out_reason.value == "(all)"
+            else outliers[outliers.reasons.str.contains(out_reason.value, regex=False)])
+    _pg = _sub.iloc[out_page.value * 48 : out_page.value * 48 + 48]
+    mo.vstack([
+        mo.md(f"**{len(_sub):,}** images flagged" +
+              ("" if out_reason.value == "(all)" else f" for `{out_reason.value}`") +
+              f" · showing {len(_pg)}"),
+        mo.image(png(montage([(load_gray(r.path), f"{r.class_folder}") for r in _pg.itertuples()],
+                             ncol=12, cell=72), scale=1), width="100%")
+        if len(_pg) else mo.md("*Nothing on this page.*"),
+    ])
+    return
+
+
+if __name__ == "__main__":
+    app.run()

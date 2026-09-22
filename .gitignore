@@ -3,3 +3,13 @@ __pycache__/
 *.py[cod]
 
 data/**/raw/
+# derived caches (regenerable)
+data/**/cache/
+
+# near-duplicate candidate pairs: ~14MB, regenerate with notebooks/01_dataset_audit.ipynb
+data/**/manifest/pairs/
+# near-duplicate candidate pairs: ~14MB, rebuilt by 01_dataset_audit.ipynb in ~21s
+data/**/manifest/pairs/
+
+# marimo session/layout scratch
+__marimo__/

@@ -5,10 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "altair>=5.5.0",
+    "imagehash>=4.3.2",
     "jupyter>=1.1.1",
     "marimo>=0.24.2",
+    "matplotlib>=3.10.0",
     "numpy>=2.5.3",
     "pandas>=3.0.6",
+    "pillow>=11.0.0",
     "ruff>=0.16.8",
     "torch>=2.14.0",
     "torchvision>=0.29.0",
@@ -27,3 +31,20 @@ torchvision = [
   { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 
+
+[tool.ruff]
+# Notebooks are the deliverable here; keep the lint honest about what is a real defect.
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = [
+    "E501",    # long lines are fine in notebook prose and print statements
+    "C408",    # dict(a=1) reads better than {"a": 1} for wide keyword-style records
+    "B008",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# marimo encodes a cell's dependencies in the function signature and renders the
+# last bare expression -- both look like defects to a linter but are required syntax.
+"notebooks/02_visual_check.py" = ["B018", "F841"]
