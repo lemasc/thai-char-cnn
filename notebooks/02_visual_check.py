@@ -539,13 +539,36 @@ def _(Image, class_char, images, load_gray, mo, np, pair_page, png, shown):
         rd = "-" if np.isnan(row.rms) else f"{row.rms:.2f}"
         _ca, _cb = class_char.get(a.class_folder, ""), class_char.get(b.class_folder, "")
         return mo.vstack([
-            mo.image(png(strip, scale=4)),
+            mo.image(png(strip, scale=4), width=320),
             mo.md(f"`{a.class_folder}` {_ca} vs `{b.class_folder}` {_cb} · "
                   f"hamming **{hd}** · rms **{rd}**"),
         ])
 
     _page = shown.iloc[pair_page.value * 8 : pair_page.value * 8 + 8]
-    mo.vstack([pair_strip(r) for r in _page.itertuples()]) if len(_page) else mo.md("*No pairs.*")
+    _cards = [pair_strip(r) for r in _page.itertuples()]
+    _rows = [mo.hstack(_cards[i : i + 2], justify="start", gap=2) for i in range(0, len(_cards), 2)]
+    mo.vstack(_rows) if len(_page) else mo.md("*No pairs.*")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    > **Decision: RMS is the near-duplicate signal, not pHash.** These are isolated single-character
+    > glyphs — simple enough that two different writers' strokes can coincidentally land close in
+    > RMS by chance, and pHash's distance is coarse (quantized in steps of 2) and its DCT resize can
+    > collapse distinct simple glyphs together. pHash is a candidate filter only; RMS makes the call.
+    >
+    > **Threshold: RMS ≤ 4**, matching the empirical gap from §10 of the audit — true duplicates
+    > (the same sample re-exported, resized, or recompressed) cluster tightly under this value, then
+    > there is a gap before genuinely different samples that merely look similar.
+    >
+    > **Group, don't delete.** A redundant sample barely moves a CNN's training signal, so
+    > thinning near-dups out of the dataset buys little. The actual risk is a near-duplicate pair
+    > landing on both sides of a train/val/test split, which inflates the validation/test metric with
+    > memorization instead of generalization. So treat each RMS ≤ 4 group as a unit that must stay
+    > entirely within one split — keep every image, just keep its duplicates together.
+    """)
     return
 
 
