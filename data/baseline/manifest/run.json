@@ -1,6 +1,6 @@
 {
   "dataset": "baseline",
-  "generated_at": "2026-09-23T06:03:49+00:00",
+  "generated_at": "2026-09-23T09:25:32+00:00",
   "versions": {
     "python": "3.12.3",
     "numpy": "2.5.3",
@@ -25,21 +25,19 @@
     "distinct_sha256": 60128,
     "redundant_copies": 2579,
     "cross_class_dup_images": 23,
-    "outliers": 5978,
+    "outliers": 7526,
     "pairs_phash": 1499407,
     "pairs_pixel": 4813351,
     "near_dup_groups": 59650,
     "near_dup_edges": 18242,
-    "cross_class_near_dup_groups": 14,
-    "cross_class_near_dup_images": 63,
-    "writers": 52,
-    "cross_writer_sha_groups": 1000
+    "cross_class_near_dup_groups": 3,
+    "cross_class_near_dup_images": 40
   },
   "timings_s": {
-    "scan_s": 0.1,
-    "phash_sweep_s": 20.7,
+    "scan_s": 0.2,
+    "phash_sweep_s": 20.8,
     "pixel_sweep_s": 1.7,
-    "pair_tables_s": 19.8
+    "pair_tables_s": 19.7
   },
   "checks": {
     "every discovered image was scanned": "PASS",
@@ -65,8 +63,7 @@
     "near-dup groups partition the readable images": "PASS",
     "every sha group sits inside one near-dup group": "PASS",
     "near-dup group id is its lowest member sha group": "PASS",
-    "cross-class near findings match manifest flag": "PASS",
-    "every filename parses into writer/session/sheet": "PASS",
+    "cross-class near findings exclude exact-duplicate queue": "PASS",
     "raw/ untouched": "PASS"
   }
 }

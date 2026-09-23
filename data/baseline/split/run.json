@@ -1,7 +1,7 @@
 {
   "dataset": "baseline",
   "split_id": "49bb16a21863",
-  "generated_at": "2026-09-23T06:10:52+00:00",
+  "generated_at": "2026-09-23T15:03:36+00:00",
   "config": {
     "unit": "writer",
     "val_fraction": 0.2,
@@ -41,7 +41,7 @@
       "unruled_cross_class": 40,
       "cross_class_hold": 4
     },
-    "relabelled": 10,
+    "relabelled": 0,
     "writers": 52,
     "val_writers": 9,
     "train_images": 48535,

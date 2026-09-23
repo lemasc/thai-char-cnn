@@ -11224,7 +11224,7 @@ path,writer_id,orig_class,label_class,class_idx,split,included,exclude_reason,ru
 181/bc_008tg_8_77.jpg,bc_008,181,181,16,train,True,,,False,True,41831
 181/bc_009sg_1_28.jpg,bc_009,181,181,16,val,True,,,False,True,33524
 181/bc_009sg_2_119.jpg,bc_009,181,181,16,val,True,,,False,True,55496
-181/bc_009sg_2_196.jpg,bc_009,181,164,3,val,True,,cross_class_rulings,False,True,49065
+181/bc_009sg_2_196.jpg,bc_009,164,164,3,val,True,,cross_class_rulings,False,True,49065
 181/bc_009sg_2_209.jpg,bc_009,181,181,16,val,True,,,False,True,19163
 181/bc_009sg_2_23.jpg,bc_009,181,181,16,val,True,,,False,True,1996
 181/bc_009sg_2_257.jpg,bc_009,181,181,16,val,True,,,False,True,56882
@@ -21074,7 +21074,7 @@ path,writer_id,orig_class,label_class,class_idx,split,included,exclude_reason,ru
 186/be_013sg_2_484.jpg,be_013,186,186,21,train,True,,,False,True,52779
 186/be_013sg_2_61.jpg,be_013,186,186,21,train,True,,,False,False,46930
 186/be_013sg_2_62.jpg,be_013,186,186,21,train,True,,,False,False,47160
-186/be_013sg_2_68.jpg,be_013,186,185,20,train,True,,cross_class_rulings,False,False,37110
+186/be_013sg_2_68.jpg,be_013,185,185,20,train,True,,cross_class_rulings,False,False,37110
 186/be_013sg_3_26.jpg,be_013,186,186,21,train,True,,,False,True,56373
 186/be_013sg_3_3.jpg,be_013,186,186,21,train,True,,,False,True,27046
 186/be_013sg_3_4.jpg,be_013,186,186,21,train,True,,,False,True,57283
@@ -25371,7 +25371,7 @@ path,writer_id,orig_class,label_class,class_idx,split,included,exclude_reason,ru
 193/be_002sg_9_291.jpg,be_002,193,193,28,val,True,,,False,True,43561
 193/be_002sg_9_322.jpg,be_002,193,193,28,val,True,,,False,True,21800
 193/be_002sg_9_347.jpg,be_002,193,193,28,val,True,,,False,True,12219
-193/be_002sg_9_351.jpg,be_002,193,209,42,val,True,,cross_class_rulings,False,True,31007
+193/be_002sg_9_351.jpg,be_002,209,209,42,val,True,,cross_class_rulings,False,True,31007
 193/be_002sg_9_361.jpg,be_002,193,193,28,val,True,,,False,True,2890
 193/be_002sg_9_39.jpg,be_002,193,193,28,val,True,,,False,True,19330
 193/be_002sg_9_431.jpg,be_002,193,193,28,val,True,,,False,True,36764
@@ -49296,11 +49296,11 @@ path,writer_id,orig_class,label_class,class_idx,split,included,exclude_reason,ru
 209/ce_001sg_2_252.jpg,ce_001,209,209,42,train,True,,,False,True,17874
 209/ce_001sg_2_82.jpg,ce_001,209,209,42,train,True,,,False,True,49818
 209/ce_001sg_2_87.jpg,ce_001,209,209,42,train,True,,,False,True,36741
-210/Copy of bc_008tg_11_118.jpg,bc_008,210,168,5,train,True,,cross_class_rulings,False,False,52729
-210/Copy of bc_008tg_11_168.jpg,bc_008,210,168,5,train,True,,cross_class_rulings,False,False,21076
-210/Copy of bc_008tg_11_3.jpg,bc_008,210,168,5,train,True,,cross_class_rulings,False,False,58191
-210/Copy of bc_008tg_11_31.jpg,bc_008,210,168,5,train,True,,cross_class_rulings,False,False,8359
-210/Copy of bc_008tg_8_312.jpg,bc_008,210,168,5,train,True,,cross_class_rulings,False,False,30588
+210/Copy of bc_008tg_11_118.jpg,bc_008,168,168,5,train,True,,cross_class_rulings,False,False,52729
+210/Copy of bc_008tg_11_168.jpg,bc_008,168,168,5,train,True,,cross_class_rulings,False,False,21076
+210/Copy of bc_008tg_11_3.jpg,bc_008,168,168,5,train,True,,cross_class_rulings,False,False,58191
+210/Copy of bc_008tg_11_31.jpg,bc_008,168,168,5,train,True,,cross_class_rulings,False,False,8359
+210/Copy of bc_008tg_8_312.jpg,bc_008,168,168,5,train,True,,cross_class_rulings,False,False,30588
 210/bc_001sg_3_112.jpg,bc_001,210,210,43,val,True,,,False,True,8754
 210/bc_001sg_3_117.jpg,bc_001,210,210,43,val,True,,,False,True,49980
 210/bc_001sg_3_120.jpg,bc_001,210,210,43,val,True,,,False,True,24460
@@ -51464,7 +51464,7 @@ path,writer_id,orig_class,label_class,class_idx,split,included,exclude_reason,ru
 210/be_003sg_2_87.jpg,be_003,210,210,43,train,True,,,False,True,17125
 210/be_003sg_4_118.jpg,be_003,210,210,43,train,True,,,False,True,24148
 210/be_003sg_4_126.jpg,be_003,210,210,43,train,True,,,False,True,19511
-210/be_003sg_4_167.jpg,be_003,210,199,33,train,True,,cross_class_rulings,False,True,30394
+210/be_003sg_4_167.jpg,be_003,199,199,33,train,True,,cross_class_rulings,False,True,30394
 210/be_003sg_4_172.jpg,be_003,210,210,43,train,True,,,False,True,1341
 210/be_003sg_4_181.jpg,be_003,210,210,43,train,True,,,False,True,59655
 210/be_003sg_4_199.jpg,be_003,210,210,43,train,True,,,False,True,31755
@@ -53510,7 +53510,7 @@ path,writer_id,orig_class,label_class,class_idx,split,included,exclude_reason,ru
 210/be_020sg_2_429.jpg,be_020,210,210,43,train,True,,,False,True,54012
 210/be_020sg_2_436.jpg,be_020,210,210,43,train,True,,,False,True,8617
 210/be_020sg_2_44.jpg,be_020,210,210,43,train,True,,,False,False,3365
-210/be_020sg_2_453.jpg,be_020,210,199,33,train,True,,cross_class_rulings,False,False,30394
+210/be_020sg_2_453.jpg,be_020,199,199,33,train,True,,cross_class_rulings,False,False,30394
 210/be_020sg_2_467.jpg,be_020,210,210,43,train,True,,,False,True,11438
 210/be_020sg_2_54.jpg,be_020,210,210,43,train,True,,,False,True,26896
 210/be_020sg_2_7.jpg,be_020,210,210,43,train,True,,,False,True,51461
