@@ -58,7 +58,7 @@ class SplitData:
         pixels, geo = decode(self.images.path.tolist(), size)
         self.pixels = torch.from_numpy(pixels).unsqueeze(1)             # (N, 1, s, s) uint8
         self.geo = torch.from_numpy(geo)
-        self.y = torch.from_numpy(self.images.class_idx.to_numpy(np.int64))
+        self.y = torch.tensor(self.images.class_idx.to_numpy(np.int64))
         self.idx = {s: np.flatnonzero(self.images.split.to_numpy() == s) for s in ("train", "val")}
         tr = self.idx["train"]
         px = self.pixels[tr].float() / 255

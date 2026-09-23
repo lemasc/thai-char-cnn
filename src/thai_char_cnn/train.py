@@ -146,7 +146,7 @@ def fit(cfg: dict, split_id: str | None = None, runs_dir: Path = RUNS, split_dir
             scaler.step(opt)
             scaler.update()
             sched.step()
-            tot_loss += float(loss) * len(y)
+            tot_loss += float(loss.detach()) * len(y)
             tot_ok += int((logits.argmax(1) == y).sum())
             tot_n += len(y)
         prob = predict(model, data, va_idx, device)

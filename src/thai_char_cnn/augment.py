@@ -17,6 +17,7 @@ import torch.nn.functional as F
 from torchvision.transforms import v2
 
 WHITE = 255
+IMPL_VERSION = 1       # bump when build_train_transform() changes behaviour; invalidates cached runs
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,8 @@ def load_augment_config(path: Path) -> AugmentConfig:
 
 
 def augment_params(cfg: AugmentConfig) -> dict:
-    return asdict(cfg)
+    """What a run hashes: the parameters and the version of the code that applies them."""
+    return asdict(cfg) | dict(impl_version=IMPL_VERSION)
 
 
 class RandomStroke(torch.nn.Module):
@@ -62,16 +64,32 @@ class RandomStroke(torch.nn.Module):
         return f.squeeze(0).to(x.dtype)
 
 
+class OnInk(torch.nn.Module):
+    """Run a geometric op on the inverted image (ink bright, paper 0), then invert back.
+
+    torchvision blends `fill` in with an interpolated mask after sampling with zero padding, so a
+    white fill leaves a faint grey line wherever the image edge lands. With paper at 0 the padding
+    *is* the background and the seam disappears.
+    """
+
+    def __init__(self, op: torch.nn.Module):
+        super().__init__()
+        self.op = op
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return WHITE - self.op(WHITE - x)
+
+
 def build_train_transform(cfg: AugmentConfig) -> v2.Compose:
-    """uint8 (1, H, W) tensor -> uint8 (1, H, W) tensor. Fill is white everywhere."""
-    ops = [v2.RandomAffine(degrees=cfg.rotation_deg,
-                           translate=(cfg.translate_frac, cfg.translate_frac),
-                           scale=(cfg.scale_min, cfg.scale_max),
-                           shear=(-cfg.shear_deg, cfg.shear_deg),
-                           interpolation=v2.InterpolationMode.BILINEAR, fill=WHITE)]
+    """uint8 (1, H, W) tensor -> uint8 (1, H, W) tensor. What enters from outside is white paper."""
+    ops = [OnInk(v2.RandomAffine(degrees=cfg.rotation_deg,
+                                 translate=(cfg.translate_frac, cfg.translate_frac),
+                                 scale=(cfg.scale_min, cfg.scale_max),
+                                 shear=(-cfg.shear_deg, cfg.shear_deg),
+                                 interpolation=v2.InterpolationMode.BILINEAR, fill=0))]
     if cfg.stroke_p > 0:
         ops.append(RandomStroke(cfg.stroke_p))
     if cfg.elastic_p > 0:
-        ops.append(v2.RandomApply([v2.ElasticTransform(alpha=cfg.elastic_alpha, sigma=cfg.elastic_sigma,
-                                                       fill=WHITE)], p=cfg.elastic_p))
+        ops.append(v2.RandomApply([OnInk(v2.ElasticTransform(alpha=cfg.elastic_alpha, sigma=cfg.elastic_sigma,
+                                                             fill=0))], p=cfg.elastic_p))
     return v2.Compose(ops)
