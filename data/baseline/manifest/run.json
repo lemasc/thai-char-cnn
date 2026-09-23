@@ -1,6 +1,6 @@
 {
   "dataset": "baseline",
-  "generated_at": "2026-09-23T04:59:30+00:00",
+  "generated_at": "2026-09-23T05:29:42+00:00",
   "versions": {
     "python": "3.12.3",
     "numpy": "2.5.3",
@@ -31,13 +31,15 @@
     "near_dup_groups": 59650,
     "near_dup_edges": 18242,
     "cross_class_near_dup_groups": 14,
-    "cross_class_near_dup_images": 63
+    "cross_class_near_dup_images": 63,
+    "writers": 52,
+    "cross_writer_sha_groups": 1000
   },
   "timings_s": {
     "scan_s": 0.1,
-    "phash_sweep_s": 20.6,
+    "phash_sweep_s": 20.4,
     "pixel_sweep_s": 1.7,
-    "pair_tables_s": 19.6
+    "pair_tables_s": 19.5
   },
   "checks": {
     "every discovered image was scanned": "PASS",
@@ -64,6 +66,7 @@
     "every sha group sits inside one near-dup group": "PASS",
     "near-dup group id is its lowest member sha group": "PASS",
     "cross-class near findings match manifest flag": "PASS",
+    "every filename parses into writer/session/sheet": "PASS",
     "raw/ untouched": "PASS"
   }
 }

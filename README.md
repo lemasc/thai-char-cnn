@@ -39,7 +39,7 @@ Sole writer of `data/{name}/manifest/`:
 
 | File | Contents |
 | --- | --- |
-| `images.csv` | Per-image index — the canonical table. `path` is relative to `raw/`; row order is the index used by the pair tables. `near_dup_group_id` is the leakage group a split must keep whole. |
+| `images.csv` | Per-image index — the canonical table. `path` is relative to `raw/`; row order is the index used by the pair tables. `near_dup_group_id` is the leakage group a split must keep whole. `writer_id` / `session` / `sheet` are parsed from the file name (`{src}_{num}{session}_{sheet}_{idx}.jpg`, `Copy of ` stripped); `writer_id` is the unit the split is made on. |
 | `classes.csv` | Per-class counts (raw and exact-dup-collapsed), geometry and brightness stats |
 | `folder_inventory.csv`, `non_images.csv` | What is on disk, including stray non-image files |
 | `findings_cross_class_exact.csv` | Byte-identical images under two different labels — an adjudication queue |
