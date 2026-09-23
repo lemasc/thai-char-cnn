@@ -99,14 +99,18 @@ Sole writer of `data/{name}/split/` (tracked):
 ```bash
 uv run jupyter lab notebooks/04_train.ipynb
 EPOCHS=1 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/04_train.ipynb   # smoke run
+VERIFY=1 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/04_train.ipynb   # + reproducibility check
 ```
 
 An experiment is a named row of config overrides on a shared `BASE`. The notebook defines no
 training logic: it calls `thai_char_cnn.train.fit`, which caches each run under
-`runs/<hash(config, seed, split_id)>/`, so a rerun loads finished runs and adding a row trains
-only that row. Sections: data check with an augmentation montage, experiment table, one train
+`runs/<hash(config, seed, split_id, code_hash)>/`, so a rerun loads finished runs and adding a row
+trains only that row. `code_hash` covers the training-side modules of `src/thai_char_cnn/`, so
+editing them invalidates the cache rather than serving results from older code. `RETRAIN=1`
+retrains every row regardless; `VERIFY=1` retrains the first run into a scratch folder and checks
+it reproduces the cached one (it does, bit for bit, on the RTX 3060). Sections: data check with an augmentation montage, experiment table, one train
 loop, a leaderboard (val macro-F1 over validated classes, mean ± sd across seeds; only runs on the
-current `split_id` are ranked), and a deep dive (per-class F1, top confused pairs, error gallery)
+current `split_id` are ranked), and a reproducibility check, and a deep dive (per-class F1, top confused pairs, error gallery)
 on the experiment named by `FOCUS`.
 
 `runs/` is gitignored. Each run holds `config.json`, `history.csv`, `metrics.json`,

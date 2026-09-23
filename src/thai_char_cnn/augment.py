@@ -17,7 +17,6 @@ import torch.nn.functional as F
 from torchvision.transforms import v2
 
 WHITE = 255
-IMPL_VERSION = 1       # bump when build_train_transform() changes behaviour; invalidates cached runs
 
 
 @dataclass(frozen=True)
@@ -42,8 +41,8 @@ def load_augment_config(path: Path) -> AugmentConfig:
 
 
 def augment_params(cfg: AugmentConfig) -> dict:
-    """What a run hashes: the parameters and the version of the code that applies them."""
-    return asdict(cfg) | dict(impl_version=IMPL_VERSION)
+    """What a run hashes. The code that applies them is covered by the run's `code_hash`."""
+    return asdict(cfg)
 
 
 class RandomStroke(torch.nn.Module):

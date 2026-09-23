@@ -1,19 +1,23 @@
 """`fit(cfg)` trains one run, or returns it from `runs/` if it already exists.
 
 A run is identified by a hash of its resolved config (which includes the seed and, when augmenting,
-the augmentation parameters) plus the split it was trained on. A finished run -- one with
-`metrics.json` -- is never retrained, the same idea as the audit's scan cache: adding an experiment
-to the notebook trains only that experiment.
+the augmentation parameters), the split it was trained on, and `code_hash` -- a hash of the modules
+that decide what training produces. Editing any of them invalidates every cached run, so a cached
+result always belongs to the code on disk. A finished run -- one with `metrics.json` -- is otherwise
+never retrained, the same idea as the audit's scan cache: adding an experiment to the notebook
+trains only that experiment. `fit(..., force=True)` retrains anyway.
 
 Each run writes `runs/<run_id>/`:
 `config.json`, `history.csv`, `metrics.json`, `per_class.csv`, `confusion.npy`,
 `val_predictions.csv`, `model.pt`.
 """
 
+import hashlib
 import json
 import math
 import os
 import random
+import shutil
 import time
 from pathlib import Path
 
@@ -38,6 +42,15 @@ DEFAULT_CONFIG = dict(
 )
 # not part of the run identity: they change speed, not results
 RUNTIME_KEYS = {"num_workers"}
+# modules whose source decides what a run produces; split logic is covered by split_id instead
+CODE_MODULES = ["augment", "data", "metrics", "model", "preprocess", "train"]
+
+
+def code_hash() -> str:
+    h = hashlib.sha256()
+    for m in CODE_MODULES:
+        h.update(m.encode() + b"\0" + (Path(__file__).parent / f"{m}.py").read_bytes())
+    return h.hexdigest()[:12]
 
 
 def current_split_id(split_dir: Path = SPLIT_DIR) -> str:
@@ -50,6 +63,7 @@ def resolve_config(cfg: dict) -> dict:
     assert not unknown, f"unknown config keys {unknown}"
     out = DEFAULT_CONFIG | cfg
     out["augment_params"] = augment_params(load_augment_config(CONFIGS / "augment.json")) if out["augment"] else None
+    out["code_hash"] = code_hash()
     return out
 
 
@@ -87,15 +101,17 @@ def predict(model: nn.Module, data: SplitData, idx: np.ndarray, device: str, bat
 
 
 def fit(cfg: dict, split_id: str | None = None, runs_dir: Path = RUNS, split_dir: Path = SPLIT_DIR,
-        data: SplitData | None = None, verbose: bool = True) -> Path:
+        data: SplitData | None = None, verbose: bool = True, force: bool = False) -> Path:
     cfg = resolve_config(cfg)
     split_id = split_id or current_split_id(split_dir)
     rid = run_id(cfg, split_id)
     run_dir = runs_dir / rid
     if (run_dir / "metrics.json").exists():
-        if verbose:
-            print(f"[{cfg.get('name', rid)}] cached -> {run_dir.relative_to(runs_dir.parent)}")
-        return run_dir
+        if not force:
+            if verbose:
+                print(f"[{cfg.get('name', rid)}] cached -> {run_dir.relative_to(runs_dir.parent)}")
+            return run_dir
+        shutil.rmtree(run_dir)            # never leave old files next to a half-written new run
     assert split_id == current_split_id(split_dir), "can only train on the current split"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -209,5 +225,6 @@ def load_runs(runs_dir: Path = RUNS) -> pd.DataFrame:
     for m in sorted(runs_dir.glob("*/metrics.json")):
         cfg = json.loads((m.parent / "config.json").read_text())
         rows.append(json.loads(m.read_text()) | {f"cfg.{k}": v for k, v in cfg.items()
-                                                 if k not in ("split_id", "run_id", "augment_params")})
+                                                 if k not in ("split_id", "run_id", "augment_params")}
+                    | {"code_hash": cfg.get("code_hash", "")})
     return pd.DataFrame(rows)
