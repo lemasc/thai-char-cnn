@@ -415,7 +415,7 @@ def _(label_seed):
     # Best-known character per class, for annotating ids elsewhere in this notebook: the
     # saved decision if one exists, otherwise the seeded TIS-620 hypothesis. Not proof —
     # still check it against the prototype in §1/§2 before trusting a caption.
-    class_char = dict(zip(label_seed.class_folder, label_seed.character.fillna("")))
+    class_char = dict(zip(label_seed.class_folder, label_seed.character.fillna(""), strict=True))
     return (class_char,)
 
 

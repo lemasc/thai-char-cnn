@@ -19,6 +19,10 @@ dependencies = [
     "torchvision>=0.29.0",
 ]
 
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
 [[tool.uv.index]]
 name = "pytorch-cu126"
 url = "https://download.pytorch.org/whl/cu126"

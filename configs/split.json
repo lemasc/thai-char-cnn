@@ -1,0 +1,8 @@
+{
+  "unit": "writer",
+  "val_fraction": 0.2,
+  "min_val_class_images": 20,
+  "seed": 42,
+  "search_iters": 5000,
+  "unruled_cross_class": "drop"
+}
