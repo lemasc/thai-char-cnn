@@ -1,6 +1,6 @@
 {
   "dataset": "baseline",
-  "generated_at": "2026-09-23T04:22:09+00:00",
+  "generated_at": "2026-09-23T04:59:30+00:00",
   "versions": {
     "python": "3.12.3",
     "numpy": "2.5.3",
@@ -14,7 +14,8 @@
     "pixel_grid": 16,
     "phash_pair_cut": 4,
     "pixel_pair_cut": 32.0,
-    "outlier_z": 3.5
+    "outlier_z": 3.5,
+    "near_dup_rms_threshold": 4.0
   },
   "counts": {
     "files": 62711,
@@ -26,11 +27,15 @@
     "cross_class_dup_images": 23,
     "outliers": 5978,
     "pairs_phash": 1499407,
-    "pairs_pixel": 4813351
+    "pairs_pixel": 4813351,
+    "near_dup_groups": 59650,
+    "near_dup_edges": 18242,
+    "cross_class_near_dup_groups": 14,
+    "cross_class_near_dup_images": 63
   },
   "timings_s": {
     "scan_s": 0.1,
-    "phash_sweep_s": 20.1,
+    "phash_sweep_s": 20.6,
     "pixel_sweep_s": 1.7,
     "pair_tables_s": 19.6
   },
@@ -54,6 +59,11 @@
     "pixel pair table matches its sweep": "PASS",
     "pair tables are upper-triangular": "PASS",
     "cross-class findings match manifest flag": "PASS",
+    "scan order is manifest order (pair indices mean the same rows)": "PASS",
+    "near-dup groups partition the readable images": "PASS",
+    "every sha group sits inside one near-dup group": "PASS",
+    "near-dup group id is its lowest member sha group": "PASS",
+    "cross-class near findings match manifest flag": "PASS",
     "raw/ untouched": "PASS"
   }
 }

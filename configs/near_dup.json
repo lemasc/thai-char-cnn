@@ -1,0 +1,6 @@
+{
+  "signal": "rms",
+  "threshold": 4.0,
+  "note": "RMS gray distance on the 16x16 letterbox grid; pairs at or under the threshold share a leakage group. Decided in 02_visual_check.py section 4.",
+  "decided_at": "2026-09-23T03:02:56+00:00"
+}

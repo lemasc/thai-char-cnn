@@ -39,10 +39,11 @@ Sole writer of `data/{name}/manifest/`:
 
 | File | Contents |
 | --- | --- |
-| `images.csv` | Per-image index — the canonical table. `path` is relative to `raw/`; row order is the index used by the pair tables. |
+| `images.csv` | Per-image index — the canonical table. `path` is relative to `raw/`; row order is the index used by the pair tables. `near_dup_group_id` is the leakage group a split must keep whole. |
 | `classes.csv` | Per-class counts (raw and exact-dup-collapsed), geometry and brightness stats |
 | `folder_inventory.csv`, `non_images.csv` | What is on disk, including stray non-image files |
 | `findings_cross_class_exact.csv` | Byte-identical images under two different labels — an adjudication queue |
+| `findings_cross_class_near.csv` | Near-duplicate groups (per `configs/near_dup.json`) spanning two classes, one row per image — an adjudication queue |
 | `findings_outliers.csv` | Robust-z outliers, with per-metric reasons |
 | `dist_phash.csv`, `dist_pixel.csv` | Full near-duplicate distance distributions |
 | `pairs/pairs_{phash,pixel}.csv.gz` | Near-duplicate candidate pairs, as row indices into `images.csv`. **Not tracked** — ~14 MB, rebuilt in ~21s |
