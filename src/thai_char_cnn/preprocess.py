@@ -17,3 +17,17 @@ def letterbox(gray: Image.Image, size: int = 32) -> np.ndarray:
     canvas = Image.new("L", (size, size), 255)
     canvas.paste(gray.resize((nw, nh), Image.Resampling.LANCZOS), ((size - nw) // 2, (size - nh) // 2))
     return np.asarray(canvas, np.uint8)
+
+
+def stretch(gray: Image.Image, size: int = 32) -> np.ndarray:
+    """Grayscale PIL image -> square uint8 input, without preserving aspect ratio."""
+    return np.asarray(gray.resize((size, size), Image.Resampling.LANCZOS), np.uint8)
+
+
+def preprocess(gray: Image.Image, size: int, mode: str) -> np.ndarray:
+    """Apply one of the explicitly supported model-input resize policies."""
+    if mode == "letterbox":
+        return letterbox(gray, size)
+    if mode == "stretch":
+        return stretch(gray, size)
+    raise ValueError(f"unknown preprocessing mode {mode!r}")

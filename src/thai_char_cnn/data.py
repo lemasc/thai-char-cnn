@@ -12,10 +12,10 @@ from PIL import Image
 from torch.utils.data import Dataset, WeightedRandomSampler
 
 from .paths import CACHE, RAW, SPLIT_DIR
-from .preprocess import letterbox
+from .preprocess import preprocess
 from .split import stable_hash
 
-PREPROCESS_VERSION = 1       # bump when letterbox() changes; invalidates the tensor cache
+PREPROCESS_VERSION = 2       # bump when input preprocessing changes; invalidates tensor caches
 N_GEO = 3
 
 
@@ -29,10 +29,10 @@ def load_classes(split_dir=SPLIT_DIR) -> pd.DataFrame:
     return pd.read_csv(split_dir / "classes.csv", keep_default_na=False).sort_values("class_idx")
 
 
-def decode(paths: list[str], size: int, raw=RAW, cache=CACHE) -> tuple[np.ndarray, np.ndarray]:
+def decode(paths: list[str], size: int, mode: str = "letterbox", raw=RAW, cache=CACHE) -> tuple[np.ndarray, np.ndarray]:
     """-> pixels (N, size, size) uint8, geometry (N, 3) float32 = log w, log h, w/h."""
-    key = stable_hash(dict(paths=paths, size=size, v=PREPROCESS_VERSION))
-    f = cache / f"tensors_{size}_{key}.npz"
+    key = stable_hash(dict(paths=paths, size=size, mode=mode, v=PREPROCESS_VERSION))
+    f = cache / f"tensors_{mode}_{size}_{key}.npz"
     if f.exists():
         z = np.load(f)
         return z["pixels"], z["geo"]
@@ -42,7 +42,7 @@ def decode(paths: list[str], size: int, raw=RAW, cache=CACHE) -> tuple[np.ndarra
         with Image.open(raw / p) as im:
             gray = im.convert("L")
         w, h = gray.size
-        pixels[i] = letterbox(gray, size)
+        pixels[i] = preprocess(gray, size, mode)
         geo[i] = (np.log(w), np.log(h), w / h)
     cache.mkdir(parents=True, exist_ok=True)
     np.savez(f, pixels=pixels, geo=geo)
@@ -52,10 +52,10 @@ def decode(paths: list[str], size: int, raw=RAW, cache=CACHE) -> tuple[np.ndarra
 class SplitData:
     """Train and val tensors plus the train-only normalisation used by both."""
 
-    def __init__(self, size: int = 32, split_dir=SPLIT_DIR):
+    def __init__(self, size: int = 32, mode: str = "letterbox", split_dir=SPLIT_DIR):
         self.images = load_split_images(split_dir)
         self.classes = load_classes(split_dir)
-        pixels, geo = decode(self.images.path.tolist(), size)
+        pixels, geo = decode(self.images.path.tolist(), size, mode)
         self.pixels = torch.from_numpy(pixels).unsqueeze(1)             # (N, 1, s, s) uint8
         self.geo = torch.from_numpy(geo)
         self.y = torch.tensor(self.images.class_idx.to_numpy(np.int64))
