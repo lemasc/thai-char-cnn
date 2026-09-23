@@ -1,8 +1,9 @@
-"""Writer-level train/val split.
+"""Train/val split by the filename-group field named ``writer_id``.
 
-A writer's whole hand goes to one side, so validation measures handwriting the model has not seen.
-The only images allowed to break that are those of *tiny* classes (too few to validate at all),
-which always go to train and are counted.
+``writer_id`` is the ``{prefix}_{number}`` portion of a filename, not a verified person identifier.
+Holding a group on one side measures held-out filename groups only. The only images allowed to leave
+their group's side are those of *tiny* classes (too few to validate at all), which always go to train
+and are counted.
 """
 
 import hashlib
@@ -28,7 +29,7 @@ def load_split_config(path: Path) -> dict:
 
 
 def config_hash(cfg: dict) -> str:
-    """Hash of the knobs that decide the writer assignment (not the ruling policy)."""
+    """Hash of the knobs that decide the filename-group assignment (not the ruling policy)."""
     keys = ["unit", "val_fraction", "min_val_class_images", "seed", "search_iters"]
     return stable_hash({k: cfg[k] for k in keys})
 
@@ -56,16 +57,16 @@ def _score(val: np.ndarray, tot: np.ndarray, frac: float) -> float:
 
 
 def assign_writers(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict]:
-    """Seeded random search over writer orders; each order is greedily filled to `val_fraction`.
+    """Seeded random search over filename-group orders; each order is greedily filled to `val_fraction`.
 
     `df` is the ruled table (one row per image with writer_id, label_class, sha_group_id,
     included). Counts are over included rows of *eligible* (non-tiny) classes, one per
-    (sha, label, writer). Returns (writers table, search summary).
+    (sha, label, filename group). Returns (writers table, search summary).
     """
     tiny = tiny_classes(df, cfg)
     inc = df[df.included & ~df.label_class.isin(tiny)].drop_duplicates(
         ["sha_group_id", "label_class", "writer_id"])
-    M = pd.crosstab(inc.writer_id, inc.label_class)          # writers x eligible classes
+    M = pd.crosstab(inc.writer_id, inc.label_class)          # filename groups x eligible classes
     writers, W = M.index.to_numpy(), M.to_numpy(np.int64)
     tot, n_w = W.sum(0), W.sum(1)
     frac = cfg["val_fraction"]
@@ -108,19 +109,19 @@ def assign_writers(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict]:
 
 def load_or_assign_writers(df: pd.DataFrame, cfg: dict, writers_csv: Path) -> tuple[pd.DataFrame, dict]:
     """Reuse the saved assignment while `split.json` is unchanged, so new rulings only move the
-    images they touch -- never whole writers. Rebuilt only when the split config changes."""
+    images they touch -- never whole filename groups. Rebuilt only when the split config changes."""
     if writers_csv.exists():
         saved = pd.read_csv(writers_csv)
         if (saved.config_hash == config_hash(cfg)).all():
             new = set(df.writer_id) - set(saved.writer_id)
-            assert not new, f"writers not in {writers_csv.name}: {sorted(new)}; delete it to rebuild"
+            assert not new, f"filename groups not in {writers_csv.name}: {sorted(new)}; delete it to rebuild"
             return saved, dict(reused=True)
     out, summary = assign_writers(df, cfg)
     return out, summary | dict(reused=False)
 
 
 def assign_images(df: pd.DataFrame, writers: pd.DataFrame, tiny: set[int]) -> pd.DataFrame:
-    """Per image split: its writer's side, except tiny classes which always train."""
+    """Per-image split: its filename group's side, except tiny classes which always train."""
     df = df.copy()
     wsplit = df.writer_id.map(writers.set_index("writer_id").split)
     df["forced_train"] = df.included & df.label_class.isin(tiny) & (wsplit == "val")
