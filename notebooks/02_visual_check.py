@@ -133,13 +133,12 @@ def _(Image, ImageDraw, RAW, ROOT, io, np):
             return np.asarray(im.convert("L"), np.uint8)
 
     def fit(arr, cell, pad=4):
-        # scale a glyph into a square cell, preserving aspect, padded with its own background
+        # scale a glyph into a square cell, preserving aspect, padded white.
         h, w = arr.shape
         inner = cell - 2 * pad
         s = min(inner / w, inner / h)
         nw, nh = max(1, round(w * s)), max(1, round(h * s))
-        bg = int(np.median(np.concatenate([arr[0, :], arr[-1, :], arr[:, 0], arr[:, -1]])))
-        canvas = Image.new("L", (cell, cell), bg)
+        canvas = Image.new("L", (cell, cell), 255)
         canvas.paste(Image.fromarray(arr).resize((nw, nh), Image.Resampling.LANCZOS),
                      ((cell - nw) // 2, (cell - nh) // 2))
         return canvas
@@ -168,16 +167,21 @@ def _(Image, ImageDraw, RAW, ROOT, io, np):
         img.convert("L").save(buf, "PNG")
         return buf.getvalue()
 
-    return load_gray, montage, png
+    return fit, load_gray, montage, png
 
 
 @app.cell
-def _(CACHE, canonical, class_ids, load_gray, np):
+def _(CACHE, canonical, class_ids, fit, load_gray, np):
     # Mean-image prototype per class. Averaging cancels stroke noise and shows the canonical glyph.
     # Cached: recomputing loads ~10k images and would stall every reactive re-run.
+    # Samples are letterboxed via fit() (scale-to-fit, aspect preserved) before averaging --
+    # a plain square stretch would flatten exactly the aspect-ratio cues that separate classes
+    # like า/ๅ or ฤ/ป's tails from the rest, which is the wrong thing to average away in the
+    # image billed as "primary evidence" for §3.
     PROTO_N, PROTO_S = 150, 48
-    # parameters are in the filename so changing them cannot silently reuse a stale cache
-    _cache = CACHE / f"prototypes_n{PROTO_N}_s{PROTO_S}.npz"
+    # parameters (and the transform) are in the filename so changing them cannot silently
+    # reuse a stale cache built under an older transform
+    _cache = CACHE / f"prototypes_n{PROTO_N}_s{PROTO_S}_fitwhite.npz"
 
     if _cache.exists():
         _z = np.load(_cache)
@@ -191,10 +195,7 @@ def _(CACHE, canonical, class_ids, load_gray, np):
                 _paths = [_paths[i] for i in _rng.permutation(len(_paths))[:PROTO_N]]
             _acc = np.zeros((PROTO_S, PROTO_S), np.float64)
             for _p in _paths:
-                from PIL import Image as _I
-                _acc += np.asarray(
-                    _I.fromarray(load_gray(_p)).resize((PROTO_S, PROTO_S), _I.Resampling.BILINEAR),
-                    np.float64)
+                _acc += np.asarray(fit(load_gray(_p), PROTO_S, pad=2), np.float64)
             _a = _acc / max(1, len(_paths))
             _a = (_a - _a.min()) / max(1e-6, _a.max() - _a.min()) * 255
             prototypes[_fid] = _a.astype(np.uint8)

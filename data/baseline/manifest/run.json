@@ -1,6 +1,6 @@
 {
   "dataset": "baseline",
-  "generated_at": "2026-09-22T10:14:01+00:00",
+  "generated_at": "2026-09-23T04:22:09+00:00",
   "versions": {
     "python": "3.12.3",
     "numpy": "2.5.3",
@@ -26,13 +26,13 @@
     "cross_class_dup_images": 23,
     "outliers": 5978,
     "pairs_phash": 1499407,
-    "pairs_pixel": 1962683
+    "pairs_pixel": 4813351
   },
   "timings_s": {
     "scan_s": 0.1,
-    "phash_sweep_s": 32.2,
+    "phash_sweep_s": 20.1,
     "pixel_sweep_s": 1.7,
-    "pair_tables_s": 11.3
+    "pair_tables_s": 19.6
   },
   "checks": {
     "every discovered image was scanned": "PASS",
