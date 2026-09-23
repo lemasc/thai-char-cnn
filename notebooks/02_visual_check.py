@@ -784,31 +784,56 @@ def _(mo):
     mo.md(r"""
     ## 7 · Outliers
 
-    Flagged by robust z-score on width, height, aspect, file size and brightness. An outlier is
-    *unusual*, not *wrong* — that is what this view is for.
+    Flagged by robust z-score (per class) on width, height, aspect, file size and brightness, plus
+    two absolute checks on ink coverage — see §9 of the audit notebook. An outlier is *unusual*,
+    not *wrong* — that is what this view is for.
+
+    Filter by class to check a single class's outliers against each other, not the whole queue —
+    useful when a reason's flags turn out to cluster in one or two classes.
     """)
     return
 
 
 @app.cell
-def _(mo, outliers):
+def _(class_char, class_ids, mo, outliers):
     _reasons = sorted({r.split("(")[0] for rs in outliers.reasons for r in rs.split("; ")})
+    def _opt(f):
+        ch = class_char.get(f, "")
+        return f"{f} {ch}" if ch else str(f)
+    out_class = mo.ui.dropdown(
+        options={"(all)": "(all)", **{_opt(f): f for f in class_ids}}, value="(all)", label="class")
     out_reason = mo.ui.dropdown(options=["(all)"] + _reasons, value="(all)", label="reason")
-    out_page = mo.ui.slider(0, 40, value=0, step=1, label="page of 48")
-    mo.hstack([out_reason, out_page], justify="start", gap=2)
-    return out_page, out_reason
+    mo.hstack([out_class, out_reason], justify="start", gap=2)
+    return out_class, out_reason
+
+
+@app.cell
+def _(out_class, out_reason, outliers):
+    out_filtered = outliers
+    if out_class.value != "(all)":
+        out_filtered = out_filtered[out_filtered.class_folder == out_class.value]
+    if out_reason.value != "(all)":
+        out_filtered = out_filtered[out_filtered.reasons.str.contains(out_reason.value, regex=False)]
+    return (out_filtered,)
+
+
+@app.cell
+def _(mo, out_filtered):
+    out_page = mo.ui.slider(0, max(1, (len(out_filtered) - 1) // 48), value=0, step=1,
+                            label=f"page of 48 (of {max(1, -(-len(out_filtered) // 48))})")
+    out_page
+    return (out_page,)
 
 
 @app.cell(hide_code=True)
-def _(class_char, load_gray, mo, montage, out_page, out_reason, outliers, png):
-    _sub = (outliers if out_reason.value == "(all)"
-            else outliers[outliers.reasons.str.contains(out_reason.value, regex=False)])
-    _pg = _sub.iloc[out_page.value * 48 : out_page.value * 48 + 48]
+def _(class_char, load_gray, mo, montage, out_class, out_filtered, out_page, out_reason, png):
+    _pg = out_filtered.iloc[out_page.value * 48 : out_page.value * 48 + 48]
     def _cap(f):
         ch = class_char.get(f, "")
         return f"{f} {ch}" if ch else str(f)
     mo.vstack([
-        mo.md(f"**{len(_sub):,}** images flagged" +
+        mo.md(f"**{len(out_filtered):,}** images flagged" +
+              ("" if out_class.value == "(all)" else f" in class `{out_class.value}`") +
               ("" if out_reason.value == "(all)" else f" for `{out_reason.value}`") +
               f" · showing {len(_pg)}"),
         mo.image(png(montage([(load_gray(r.path), _cap(r.class_folder)) for r in _pg.itertuples()],
