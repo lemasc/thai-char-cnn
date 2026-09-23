@@ -72,6 +72,7 @@ def _(MANIFEST, pd):
     images = pd.read_csv(MANIFEST / "images.csv", keep_default_na=False, na_values=[""])
     classes = pd.read_csv(MANIFEST / "classes.csv")
     cross = pd.read_csv(MANIFEST / "findings_cross_class_exact.csv")
+    cross_near = pd.read_csv(MANIFEST / "findings_cross_class_near.csv")
     outliers = pd.read_csv(MANIFEST / "findings_outliers.csv")
     # Pair tables are regenerable and not tracked in git, so they may be absent on a fresh
     # clone. Fall back to empty frames -- section 4 then explains itself instead of crashing.
@@ -90,6 +91,7 @@ def _(MANIFEST, pd):
         class_ids,
         classes,
         cross,
+        cross_near,
         images,
         outliers,
         pairs_available,
@@ -99,13 +101,14 @@ def _(MANIFEST, pd):
 
 
 @app.cell(hide_code=True)
-def _(canonical, classes, cross, images, mo, outliers):
+def _(canonical, classes, cross, cross_near, images, mo, outliers):
     mo.hstack(
         [
             mo.stat(f"{len(images):,}", label="images"),
             mo.stat(f"{len(canonical):,}", label="canonical (exact dups collapsed)"),
             mo.stat(f"{len(classes)}", label="classes"),
             mo.stat(f"{cross.sha_group_id.nunique()}", label="cross-class dup groups"),
+            mo.stat(f"{cross_near.near_dup_group_id.nunique()}", label="cross-class near groups"),
             mo.stat(f"{len(outliers):,}", label="outliers queued"),
         ],
         justify="start",
@@ -663,7 +666,123 @@ def _(CONFIGS, UTC, datetime, mo, pd, ruling_editor, save_rulings):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 6 · Outliers
+    ## 6 · Cross-class near-duplicate queue
+
+    These leakage groups connect images from more than one class through the decided RMS ≤ 4
+    rule. Unlike the exact-duplicate queue, their images can be distinct, so rule each image:
+    `keep` keeps its folder label, `reassign` supplies the correct class folder, and `drop`
+    excludes it. Leave `ruling` blank to defer it.
+
+    This is a label decision, not a split decision: all members remain in one leakage group even
+    after a ruling. Writes `configs/image_rulings.csv`.
+    """)
+    return
+
+
+@app.cell
+def _(cross_near, mo):
+    ngroups = sorted(cross_near.near_dup_group_id.unique())
+    npick = mo.ui.dropdown(options={str(g): g for g in ngroups}, value=str(ngroups[0]),
+                           label="near-duplicate group")
+    npick
+    return (npick,)
+
+
+@app.cell(hide_code=True)
+def _(class_char, cross_near, load_gray, mo, montage, npick, png):
+    _g = cross_near[cross_near.near_dup_group_id == npick.value]
+
+    def _cap(r):
+        ch = class_char.get(r.class_folder, "")
+        return f"cls {r.class_folder} {ch} · sha {r.sha_group_id}" if ch else f"cls {r.class_folder} · sha {r.sha_group_id}"
+
+    _table = _g[["path", "class_folder", "sha_group_id", "sha_group_spans_classes"]].copy()
+    _table["character"] = _g.class_folder.map(class_char)
+    mo.vstack([
+        mo.md(f"**{len(_g)} images · {_g.n_distinct_sha.iloc[0]} distinct exact-image groups · "
+              f"classes {_g.classes_in_group.iloc[0]}**"),
+        mo.image(png(montage([(load_gray(r.path), _cap(r)) for r in _g.itertuples()],
+                              ncol=6, cell=96, scale=2, label_h=14)), width="100%",
+                 caption=f"near-duplicate group {npick.value} · connected under RMS <= 4"),
+        mo.ui.table(_table, selection=None),
+    ])
+    return
+
+
+@app.cell
+def _(CONFIGS, cross_near, pd):
+    _path = CONFIGS / "image_rulings.csv"
+    _existing = pd.read_csv(_path, keep_default_na=False) if _path.exists() else None
+    _rows = []
+    for _r in cross_near.itertuples():
+        _prev = (_existing[_existing.path == _r.path].iloc[0]
+                 if _existing is not None and _r.path in set(_existing.path) else None)
+        _rows.append(dict(
+            near_dup_group_id=_r.near_dup_group_id,
+            path=_r.path,
+            class_folder=_r.class_folder,
+            classes_in_group=_r.classes_in_group,
+            ruling="" if _prev is None else _prev.ruling,
+            correct_class="" if _prev is None else _prev.correct_class,
+            source="cross_class_near" if _prev is None else _prev.get("source", "cross_class_near"),
+            note="" if _prev is None else _prev.get("note", ""),
+        ))
+    near_ruling_seed = pd.DataFrame(_rows)
+    return (near_ruling_seed,)
+
+
+@app.cell
+def _(mo, near_ruling_seed):
+    near_ruling_editor = mo.ui.data_editor(
+        near_ruling_seed,
+        label="cross-class near-duplicate image rulings",
+        editable_columns=["ruling", "correct_class", "source", "note"],
+    )
+    near_ruling_editor
+    return (near_ruling_editor,)
+
+
+@app.cell
+def _(mo):
+    save_near_rulings = mo.ui.button(label="Save image rulings", value=0, on_click=lambda v: v + 1)
+    save_near_rulings
+    return (save_near_rulings,)
+
+
+@app.cell(hide_code=True)
+def _(
+    CONFIGS,
+    UTC,
+    cross_near,
+    datetime,
+    mo,
+    near_ruling_editor,
+    pd,
+    save_near_rulings,
+):
+    if save_near_rulings.value:
+        _df = pd.DataFrame(near_ruling_editor.value).copy()
+        _df["decided_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+        _out = _df[["path", "ruling", "correct_class", "source", "note", "decided_at"]]
+        _path = CONFIGS / "image_rulings.csv"
+        # This view owns its queue, not any image decisions recorded elsewhere.
+        _prior = pd.read_csv(_path, keep_default_na=False) if _path.exists() else pd.DataFrame()
+        _prior = _prior[~_prior.path.isin(cross_near.path)] if "path" in _prior else _prior
+        _prior = _prior.reindex(columns=_out.columns, fill_value="")
+        pd.concat([_prior, _out], ignore_index=True).to_csv(_path, index=False)
+        _decided = int((_out.ruling.astype(str).str.strip() != "").sum())
+        _message = mo.md(f"Saved **{len(_out)}** rows to `configs/image_rulings.csv` — "
+                         f"{_decided} decided, {len(_out) - _decided} deferred.")
+    else:
+        _message = mo.md("*Not saved yet.*")
+    _message
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 7 · Outliers
 
     Flagged by robust z-score on width, height, aspect, file size and brightness. An outlier is
     *unusual*, not *wrong* — that is what this view is for.
