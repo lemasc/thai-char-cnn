@@ -106,9 +106,10 @@ VERIFY=1 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/04
 
 An experiment is a named row of config overrides on a shared `BASE`. The notebook defines no
 training logic: it calls `thai_char_cnn.train.fit`, which caches each run under
-`runs/<hash(config, seed, split_id, code_hash)>/`, so a rerun loads finished runs and adding a row
-trains only that row. `code_hash` covers the training-side modules of `src/thai_char_cnn/`, so
-editing them invalidates the cache rather than serving results from older code. `RETRAIN=1`
+`runs/<hash(config, seed, split_id, train_version)>/`, so a rerun loads finished runs and adding a row
+trains only that row. `TRAIN_VERSION` in `train.py` is bumped by hand when a change alters what an
+existing config produces; adding a model or a config key with a neutral default (`IDENTITY_NEUTRAL`)
+keeps every earlier run. `RETRAIN=1`
 retrains every row regardless; `VERIFY=1` retrains the first run into a scratch folder and checks
 it reproduces the cached one (it does, bit for bit, on the RTX 3060). Sections: data check with an augmentation montage, experiment table, one train
 loop, a leaderboard (val macro-F1 over validated classes, mean ± sd across seeds; only runs on the

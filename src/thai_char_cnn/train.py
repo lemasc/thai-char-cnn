@@ -1,11 +1,17 @@
 """`fit(cfg)` trains one run, or returns it from `runs/` if it already exists.
 
 A run is identified by a hash of its resolved config (which includes the seed and, when augmenting,
-the augmentation parameters), the split it was trained on, and `code_hash` -- a hash of the modules
-that decide what training produces. Editing any of them invalidates every cached run, so a cached
-result always belongs to the code on disk. A finished run -- one with `metrics.json` -- is otherwise
-never retrained, the same idea as the audit's scan cache: adding an experiment to the notebook
-trains only that experiment. `fit(..., force=True)` retrains anyway.
+the augmentation parameters), the split it was trained on, and `TRAIN_VERSION`. A finished run --
+one with `metrics.json` -- is never retrained, the same idea as the audit's scan cache: adding an
+experiment to the notebook trains only that experiment. `fit(..., force=True)` retrains anyway.
+
+The code is versioned by hand, like `PREPROCESS_VERSION`, not hashed: a source hash also changed when
+a model was added or a comment edited, and threw away every run. Bump `TRAIN_VERSION` when a change
+alters what an *existing* config produces (training loop, metrics, an existing model's layers,
+augmentation semantics). Adding a model, or a config key whose default keeps old behaviour (list it
+in `IDENTITY_NEUTRAL`), needs no bump. Use a new name rather than +1, so two branches that each bump
+don't collide in the shared `runs/`. `code_hash` is still recorded in `config.json` as provenance,
+and the notebook's `VERIFY=1` check catches a forgotten bump.
 
 Each run writes `runs/<run_id>/`:
 `config.json`, `history.csv`, `metrics.json`, `per_class.csv`, `confusion.npy`,
@@ -28,7 +34,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from .augment import augment_params, build_train_transform, load_augment_config
-from .data import SplitData, make_sampler
+from .data import PREPROCESS_VERSION, SplitData, make_sampler
 from .metrics import confusion, macro_f1, per_class
 from .model import build_model
 from .paths import CONFIGS, RUNS, SPLIT_DIR
@@ -44,7 +50,12 @@ DEFAULT_CONFIG = dict(
 RUNTIME_KEYS = {"num_workers"}
 # optional experiment keys, absent from DEFAULT_CONFIG so runs that don't set them keep their identity
 OPTIONAL_KEYS = {"augment_file"}          # a file in configs/ to augment from instead of augment.json
-# modules whose source decides what a run produces; split logic is covered by split_id instead
+# keys added after runs existed: left out of the run identity while at this value, so adding a key
+# with a behaviour-preserving default keeps every earlier run's id
+IDENTITY_NEUTRAL: dict = {}
+# part of the run identity; see the module docstring for when to change it
+TRAIN_VERSION = "1"
+# provenance only (recorded, not hashed); split logic is covered by split_id instead
 CODE_MODULES = ["augment", "data", "metrics", "model", "preprocess", "train"]
 
 
@@ -66,6 +77,7 @@ def resolve_config(cfg: dict) -> dict:
     out = DEFAULT_CONFIG | cfg
     assert out["augment"] or "augment_file" not in out, "augment_file needs augment=True"
     out["augment_params"] = augment_params(load_augment_config(augment_path(out))) if out["augment"] else None
+    out["train_version"] = f"{TRAIN_VERSION}.p{PREPROCESS_VERSION}"
     out["code_hash"] = code_hash()
     return out
 
@@ -75,7 +87,8 @@ def augment_path(cfg: dict) -> Path:
 
 
 def run_id(cfg: dict, split_id: str) -> str:
-    ident = {k: v for k, v in cfg.items() if k not in RUNTIME_KEYS | {"name"}}
+    ident = {k: v for k, v in cfg.items() if k not in RUNTIME_KEYS | {"name", "code_hash"}
+             and not (k in IDENTITY_NEUTRAL and v == IDENTITY_NEUTRAL[k])}
     return stable_hash(dict(config=ident, split_id=split_id))
 
 
@@ -116,7 +129,7 @@ def fit(cfg: dict, split_id: str | None = None, runs_dir: Path = RUNS, split_dir
     if (run_dir / "metrics.json").exists():
         if not force:
             if verbose:
-                print(f"[{cfg.get('name', rid)}] cached -> {run_dir.relative_to(runs_dir.parent)}")
+                print(f"[{cfg.get('name', rid)}] cached -> {run_dir}")
             return run_dir
         shutil.rmtree(run_dir)            # never leave old files next to a half-written new run
     assert split_id == current_split_id(split_dir), "can only train on the current split"
@@ -201,7 +214,11 @@ def fit(cfg: dict, split_id: str | None = None, runs_dir: Path = RUNS, split_dir
     pc = per_class(cm).merge(classes[["class_idx", "folder", "character", "status", "train_n", "val_n"]],
                              on="class_idx")
 
-    run_dir.mkdir(parents=True, exist_ok=True)
+    # write into a scratch dir and rename, so a run trained at the same time from another worktree
+    # (worktrees symlink runs/) never leaves a mix of two runs' files
+    final_dir, run_dir = run_dir, runs_dir / f".{rid}.tmp-{os.getpid()}"
+    shutil.rmtree(run_dir, ignore_errors=True)
+    run_dir.mkdir(parents=True)
     (run_dir / "config.json").write_text(json.dumps(cfg | dict(split_id=split_id, run_id=rid), indent=2))
     pd.DataFrame(history).to_csv(run_dir / "history.csv", index=False)
     pc.to_csv(run_dir / "per_class.csv", index=False)
@@ -222,18 +239,22 @@ def fit(cfg: dict, split_id: str | None = None, runs_dir: Path = RUNS, split_dir
                    train_time_s=round(train_time, 1))
     # metrics.json last: its presence is what marks the run finished
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    try:
+        run_dir.rename(final_dir)
+    except OSError:                       # finished meanwhile elsewhere: keep that one
+        shutil.rmtree(run_dir)
     if verbose:
         print(f"[{cfg.get('name', rid)}] best epoch {best_epoch}: val macro-F1 {metrics['val_macro_f1']:.4f} "
-              f"-> {run_dir.relative_to(runs_dir.parent)}")
-    return run_dir
+              f"-> {final_dir}")
+    return final_dir
 
 
 def load_runs(runs_dir: Path = RUNS) -> pd.DataFrame:
     """One row per finished run: its metrics plus its config (prefixed `cfg.`)."""
     rows = []
-    for m in sorted(runs_dir.glob("*/metrics.json")):
+    for m in sorted(runs_dir.glob("[!.]*/metrics.json")):         # skip in-progress .tmp dirs
         cfg = json.loads((m.parent / "config.json").read_text())
         rows.append(json.loads(m.read_text()) | {f"cfg.{k}": v for k, v in cfg.items()
                                                  if k not in ("split_id", "run_id", "augment_params")}
-                    | {"code_hash": cfg.get("code_hash", "")})
+                    | {"code_hash": cfg.get("code_hash", ""), "train_version": cfg.get("train_version", "")})
     return pd.DataFrame(rows)
