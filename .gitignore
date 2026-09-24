@@ -2,9 +2,10 @@
 __pycache__/
 *.py[cod]
 
-data/**/raw/
+data/**/raw
 # derived caches (regenerable)
 data/**/cache/
+data/**/quality/
 
 # near-duplicate candidate pairs: ~14MB, regenerate with notebooks/01_dataset_audit.ipynb
 data/**/manifest/pairs/

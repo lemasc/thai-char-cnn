@@ -1,7 +1,7 @@
 # thai-char-cnn
 
-Thai character classification: dataset exploration, a filename-group train/val split,
-and a baseline CNN.
+Thai character classification: dataset exploration, image-quality review, a filename-group
+train/val split, and controlled transfer-learning experiments.
 
 ```bash
 uv sync     # installs deps and the shared `thai_char_cnn` package (src/) in editable mode
@@ -23,7 +23,7 @@ Exploration is split by the *kind* of work, not by topic:
 
 > **`01_dataset_audit.ipynb` owns derived data. `02_visual_check.py` owns human decisions.**
 > Decisions flow back as small files under `configs/`, which the audit reads on its next run.
-> `03_split.ipynb` applies those decisions to produce the split; `04_train.ipynb` trains on it.
+> `03_split.ipynb` applies those decisions to produce the split; `04_train.ipynb` audits quality and trains on a leakage-safe subset.
 > Logic shared between notebooks lives in `src/thai_char_cnn/`. The shared review app
 > (`apps/audit.py`) is a second writer of human decisions and works the same way.
 
@@ -96,27 +96,33 @@ Sole writer of `data/{name}/split/` (tracked):
 | `classes.csv` | The fixed class index (`class_idx` 0..71 from the audit's folder list, never renumbered by rulings), `train_n`, `val_n`, `status` ∈ `validated` / `weak` (val < 5) / `not_validated` |
 | `run.json` | `split_id` (changes exactly when what a model trains or is scored on changes), counts, search summary, self-checks |
 
-### 4 · `notebooks/04_train.ipynb` — experiments as data
+### 4 · `notebooks/04_train.ipynb` — quality audit and model experiments
 
 ```bash
 uv run jupyter lab notebooks/04_train.ipynb
-EPOCHS=1 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/04_train.ipynb   # smoke run
-VERIFY=1 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/04_train.ipynb   # + reproducibility check
+uv run python notebooks/build_04.py  # regenerate notebook after editing its source
 ```
 
-An experiment is a named row of config overrides on a shared `BASE`. The notebook defines no
-training logic: it calls `thai_char_cnn.train.fit`, which caches each run under
-`runs/<hash(config, seed, split_id, code_hash)>/`, so a rerun loads finished runs and adding a row
-trains only that row. `code_hash` covers the training-side modules of `src/thai_char_cnn/`, so
-editing them invalidates the cache rather than serving results from older code. `RETRAIN=1`
-retrains every row regardless; `VERIFY=1` retrains the first run into a scratch folder and checks
-it reproduces the cached one (it does, bit for bit, on the RTX 3060). Sections: data check with an augmentation montage, experiment table, one train
-loop, a leaderboard (val macro-F1 over validated classes, mean ± sd across seeds; only runs on the
-current `split_id` are ranked), and a reproducibility check, and a deep dive (per-class F1, top confused pairs, error gallery)
-on the experiment named by `FOCUS`.
+The notebook scans every image for geometry, brightness, foreground, connected components,
+border contact, blur, contrast, and speckle signals. It displays suspicious images and
+before/after processing views. Flags never delete samples. It removes training rows that share
+validation filename groups, exact hashes, or near-duplicate groups; validation membership stays
+fixed unless a raw file is unavailable. Unavailable paths are listed and excluded from model data;
+every available file must match its manifest SHA-256. The source split currently has 27
+writer-group conflicts and 467 exact-hash overlaps.
 
-`runs/` is gitignored. Each run holds `config.json`, `history.csv`, `metrics.json`,
-`per_class.csv`, `confusion.npy`, `val_predictions.csv`, `model.pt`.
+`configs/class_labels.csv` currently marks all 72 labels as hypotheses. The notebook checks that
+the split and config agree on 72 unique Unicode labels and reports their TIS-620 mapping. It
+shows visual-review status without treating blank confidence or hypothesis notes as verification.
+Training can proceed with the configured labels; semantic label confirmation remains pending.
+
+Once labels are confirmed, phase A compares raw, bounding-box, selective denoise, conservative
+component cleaning, and median-filter inputs. Later phases compare augmentation, ResNet50 /
+EfficientNetV2-S / ConvNeXt-Tiny, imbalance strategies, and two-stage fine-tuning. Optional
+MixUp and test-time augmentation remain explicit switches. Each run writes `history.csv`,
+`metrics.json`, `val_predictions.csv`, and `model.pt` under `runs/quality_cv/<hash>/`. The hash
+covers exact effective split membership, experiment settings, and training implementation.
+Raw images and pretrained weights are required to execute the notebook; neither is tracked here.
 
 ### Audit app · `apps/audit.py` — shared image review
 
