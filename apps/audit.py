@@ -269,7 +269,16 @@ document.addEventListener('keydown', (e) => {
 """
 
 CSS = """
-#gallery .caption-label, #neigh .caption-label { font-size: 12px; }
+/* By default the caption is an absolutely-positioned badge over the image's bottom-right corner,
+   hiding it until you hover (opacity only drops on hover). Lay the thumbnail out as a column
+   instead so the caption sits in its own strip below the glyph -- nothing is ever covered. */
+#gallery .thumbnail-lg, #neigh .thumbnail-lg { display: flex; flex-direction: column; }
+#gallery .thumbnail-lg > img, #neigh .thumbnail-lg > img { flex: 1 1 auto; min-height: 0; width: 100%; }
+#gallery .caption-label, #neigh .caption-label {
+  position: static; flex: 0 0 auto; width: 100%; max-width: 100%; margin: 0; border-radius: 0;
+  border-left: none; box-sizing: border-box; text-align: center; font-size: 12px;
+}
+#gallery .thumbnail-lg:hover .caption-label, #neigh .thumbnail-lg:hover .caption-label { opacity: 1; }
 /* Gradio sizes the grid as `columns` x minmax(100px, 1fr), which overflows sideways in a narrow
    column. Fit as many columns as the width allows instead; extra thumbnails wrap downward. */
 #gallery .grid-container, #neigh .grid-container {
