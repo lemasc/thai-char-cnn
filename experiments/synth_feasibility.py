@@ -7,6 +7,8 @@ configs would hash to the same run ids as the real-only runs there).
 
     uv run python experiments/synth_feasibility.py            # all experiments
     SEEDS=42 uv run python experiments/synth_feasibility.py   # one seed, quick
+    AUGMENT=1 uv run python experiments/synth_feasibility.py  # same arms with tiered augmentation
+    PREPROCESS=letterbox ...                                  # the pre-2026-09-24 default
 
 Synthetic images are 64x64 renders with padding; baseline images are tight ink crops. Each synthetic
 image is therefore cropped to its ink bounding box first, so pixels *and* geometry features follow
@@ -29,14 +31,15 @@ from thai_char_cnn.metrics import confusion, macro_f1, per_class
 from thai_char_cnn.model import build_model
 from thai_char_cnn.paths import ROOT, RUNS
 from thai_char_cnn.preprocess import preprocess
-from thai_char_cnn.train import fit, predict
+from thai_char_cnn.train import current_split_id, fit, predict
 
 SYN = ROOT / "data" / "synthetic" / "raw"
-OUT = ROOT / "runs_synth"
 INK = 200            # a pixel below this is ink when finding the crop box (renders are anti-aliased)
 SEEDS = [int(s) for s in os.environ.get("SEEDS", "42,137,271").split(",")]
 RARE = 100           # "rare" class: fewer real train images than this
-BASE = dict(model="small_cnn", preprocess="letterbox", use_geometry=False, img_size=32)
+BASE = dict(model="small_cnn", preprocess=os.environ.get("PREPROCESS", "stretch"), use_geometry=False, img_size=32,
+            augment=os.environ.get("AUGMENT", "0") == "1")
+OUT = ROOT / "runs_synth" / (BASE["preprocess"] + ("+augment" if BASE["augment"] else ""))
 
 
 def load_synthetic(classes: pd.DataFrame, size: int, mode: str) -> pd.DataFrame:
@@ -85,8 +88,11 @@ def with_synthetic(data: SplitData, syn: pd.DataFrame, keep_real: bool, drop_cli
 
 
 def label_agreement(syn: pd.DataFrame, classes: pd.DataFrame) -> pd.DataFrame:
-    """E0: the best existing real-only run labels every synthetic image of a shared class."""
-    best = max(RUNS.glob("*/metrics.json"), key=lambda f: json.loads(f.read_text())["val_macro_f1"])
+    """E0: the best existing real-only run on the current split labels every synthetic image of a shared class."""
+    sid = current_split_id()
+    runs = [f for f in RUNS.glob("*/metrics.json") if json.loads(f.read_text())["split_id"] == sid
+            and json.loads((f.parent / "config.json").read_text()).get("model") == BASE["model"]]
+    best = max(runs, key=lambda f: json.loads(f.read_text())["val_macro_f1"])
     ck = torch.load(best.parent / "model.pt", weights_only=False)
     cfg = ck["config"]
     s = syn if (cfg["img_size"], cfg["preprocess"]) == (BASE["img_size"], BASE["preprocess"]) else \
@@ -126,7 +132,7 @@ def rare_real_accuracy(run_dir: Path, data: SplitData, syn_only: bool) -> dict:
 
 
 def main() -> None:
-    OUT.mkdir(exist_ok=True)
+    OUT.mkdir(parents=True, exist_ok=True)
     real = SplitData(BASE["img_size"], BASE["preprocess"])
     syn = load_synthetic(real.classes, BASE["img_size"], BASE["preprocess"])
     print(f"synthetic: {len(syn)} images, {syn.class_idx.isna().sum()} in classes outside the 72, "
