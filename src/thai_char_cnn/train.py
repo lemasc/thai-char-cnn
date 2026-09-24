@@ -35,7 +35,7 @@ from .paths import CONFIGS, RUNS, SPLIT_DIR
 from .split import stable_hash
 
 DEFAULT_CONFIG = dict(
-    model="small_cnn", width=32, dropout=0.3, use_geometry=False, img_size=32, preprocess="letterbox",
+    model="small_cnn", width=32, dropout=0.3, use_geometry=False, img_size=32, preprocess="stretch",
     augment=False, sampler="none",
     epochs=40, batch_size=256, lr=3e-3, weight_decay=5e-4, warmup_epochs=1, label_smoothing=0.0,
     patience=8, seed=42, amp=True,

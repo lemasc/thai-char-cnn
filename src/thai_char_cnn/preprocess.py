@@ -1,8 +1,13 @@
 """Image -> fixed-size model input.
 
-Same rule as `pixel_grid_vec` in the audit (§4): scale to fit, keep the aspect ratio, LANCZOS,
-pad with white, centred. Images are tight ink crops on white paper, so white is the background by
-construction and a stretch would erase the aspect cues that separate า from ๅ.
+Two policies. `stretch`, the training default, resizes the tight ink crop straight to a square.
+`letterbox` is the same rule as `pixel_grid_vec` in the audit (§4): scale to fit, keep the aspect
+ratio, LANCZOS, pad with white, centred (images are tight ink crops on white paper, so white is the
+background by construction).
+
+Letterbox keeps aspect ratio, which was expected to matter for pairs like า/ๅ. In the 04_train
+ablation (3 seeds, before and after the data audit) stretch scored higher macro-F1 on every seed,
+and ๅ itself improved; letterbox stays as the control.
 """
 
 import numpy as np

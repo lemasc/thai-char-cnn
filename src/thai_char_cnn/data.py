@@ -29,7 +29,7 @@ def load_classes(split_dir=SPLIT_DIR) -> pd.DataFrame:
     return pd.read_csv(split_dir / "classes.csv", keep_default_na=False).sort_values("class_idx")
 
 
-def decode(paths: list[str], size: int, mode: str = "letterbox", raw=RAW, cache=CACHE) -> tuple[np.ndarray, np.ndarray]:
+def decode(paths: list[str], size: int, mode: str = "stretch", raw=RAW, cache=CACHE) -> tuple[np.ndarray, np.ndarray]:
     """-> pixels (N, size, size) uint8, geometry (N, 3) float32 = log w, log h, w/h."""
     key = stable_hash(dict(paths=paths, size=size, mode=mode, v=PREPROCESS_VERSION))
     f = cache / f"tensors_{mode}_{size}_{key}.npz"
@@ -52,7 +52,7 @@ def decode(paths: list[str], size: int, mode: str = "letterbox", raw=RAW, cache=
 class SplitData:
     """Train and val tensors plus the train-only normalisation used by both."""
 
-    def __init__(self, size: int = 32, mode: str = "letterbox", split_dir=SPLIT_DIR):
+    def __init__(self, size: int = 32, mode: str = "stretch", split_dir=SPLIT_DIR):
         self.images = load_split_images(split_dir)
         self.classes = load_classes(split_dir)
         pixels, geo = decode(self.images.path.tolist(), size, mode)
