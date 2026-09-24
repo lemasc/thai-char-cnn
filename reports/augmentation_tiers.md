@@ -142,3 +142,28 @@ below, the same non-geometric settings for every tier, is now the most promising
 2. Try augmentation with stretch preprocessing, the current best un-augmented setup.
 3. Look at ด/ต and า/ๅ outside augmentation, for example at higher input resolution.
 4. Before trusting sub-percent gains, check them on a font-aware split or the hidden test set.
+
+## Cleaned-data follow-up
+
+*Added 2026-09-24. Dataset `baseline` after the audit rulings, regenerated split
+`d0a0d7ada85a`, `small_cnn` at 32 px stretch. Each row uses seeds 42, 137 and 271.*
+
+The data cleaning changes the absolute score substantially, so these numbers must not be compared
+directly to the earlier `49bb16a21863` rows. The same frozen filename-group assignment was reused,
+but 227 images are now excluded and 1,101 relabelled.
+
+| row | macro-F1 | seed sd | accuracy | val errors | ว/า | า/ๅ |
+| --- | --- | --- | --- | --- | --- | --- |
+| stretch, no augmentation | 0.9889 | 0.0020 | 0.9904 | 346 | 3 | 214 |
+| stretch + current tiers | **0.9894** | 0.0013 | 0.9902 | 354 | 4 | 219 |
+| stretch + geometry-only tiers | 0.9871 | 0.0004 | 0.9887 | 406 | 3 | 265 |
+
+`configs/augment_geometry_only.json` is the geometry-only control: it retains every tier's
+geometric limits and disables blur, noise, and brightness/contrast for all tiers. It was the
+first suggested follow-up, but is worse than both the no-augmentation stretch baseline and the
+current tiers. Current tiers have a +0.0005 macro-F1 mean over baseline, far below the seed spread,
+with eight more summed validation errors. Keep it as an unproven candidate, not a selected change.
+
+The large ว/า failure from the uncleaned split is gone after data cleaning; า/ๅ remains the main
+confusion and gets worse under both augmentation variants. The useful next comparison is a
+font-aware split or hidden test evaluation, rather than further tier tuning on this validation set.
