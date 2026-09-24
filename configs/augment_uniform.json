@@ -1,0 +1,7 @@
+{
+  "note": "Control for tiered augmentation: every class gets the same profile, the pre-tier global defaults (rotation 8, shear 5, scale 0.9-1.1, translate 0.04, stroke / elastic off) with the tier-era extras (bbox jitter, blur, noise, cutout, brightness / contrast) off. Used by the letterbox+augment-uniform row in 04_train.",
+  "uniform": {"rotation_deg": 8, "shear_deg": 5, "shear_p": 1.0, "scale_delta": 0.10,
+              "translate_x": 0.04, "translate_y": 0.04, "bbox_jitter": 0.0,
+              "elastic_p": 0.0, "stroke_p": 0.0, "blur_p": 0.0, "noise_p": 0.0,
+              "erase_p": 0.0, "photo_p": 0.0}
+}

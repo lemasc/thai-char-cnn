@@ -96,6 +96,32 @@ Confusions between the pairs that drove each decision, both directions summed:
 - **Differences between A3, A4 and the baseline are small.** Both gains are smaller than one
   baseline seed standard deviation. Three seeds are enough to see A1 is worse, not to rank A3 against A4.
 
+## Control: uniform augmentation (no tiers)
+
+*Added 2026-09-24.* Every earlier round compared tiers against no augmentation. This control
+gives every class the same profile (`configs/augment_uniform.json`, row
+`letterbox+augment-uniform` in `04_train`): the pre-tier global defaults, ±8° rotation, ±5°
+shear, 0.9-1.1 scale, 4% shift, with stroke, elastic, bbox jitter, blur, noise, cutout and
+brightness/contrast off. It uses the same pipeline and seeds as A4.
+
+| row | macro-F1 | seed sd | accuracy | val errors | ว/า | า/ๅ | ใ/า | ด/ต | ั/้ | Tier 1 errors |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline (off) | 0.9724 | 0.0013 | 0.9771 | 826 | 148 | 213 | 86 | 45 | 48 | 126 |
+| A4 (tiered) | 0.9731 | 0.0003 | 0.9782 | 788 | 140 | 208 | 88 | 44 | 19 | 147 |
+| uniform | 0.9721 | 0.0013 | 0.9737 | 950 | 168 | 328 | 91 | 64 | 28 | 114 |
+
+- **Macro-F1 can't separate the three.** They are within about one seed sd of each other.
+- **The errors show where tiers matter.** Uniform geometry hurts the near-duplicates: า/ๅ goes up
+  by more than half (213 → 328) and ด/ต by 40% (45 → 64), and total val errors are the highest of
+  any row. Tier 5's near-zero geometry for า/ๅ is doing real work.
+- **Uniform is better for Tier 1 classes** (114 errors, versus 126 for baseline and 147 for A4).
+  This supports finding 6: A4's extra noise, blur and photometric changes on Tier 1, or the
+  difference in strength between tiers, costs the robust classes something.
+- **Marks improve with either kind of augmentation** (ั/้ 48 → 28 uniform, 19 tiered).
+
+Taken together: keep per-tier *geometry* limits, which protect the confusable pairs. Next-step 1
+below, the same non-geometric settings for every tier, is now the most promising change.
+
 ## Current configuration
 
 `configs/augment.json` holds these overrides on top of the default tier table in `augment.py`:

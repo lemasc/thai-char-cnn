@@ -25,6 +25,9 @@ between tiers once the confusion matrix says so:
 
     {"profiles": {"tier2": {"rotation_deg": 4}}, "tiers": {"ว": [2]}}
 
+`{"uniform": {...}}` instead switches tiering off: every class gets Tier 1 with those overrides.
+It is the control that says whether tiering earns its keep.
+
 No flips: a mirrored Thai glyph is a different glyph or none at all.
 """
 
@@ -144,6 +147,10 @@ class AugmentConfig:
     profiles: dict = field(default_factory=dict)   # {"tier2": {"rotation_deg": 4, ...}}
     tiers: dict = field(default_factory=dict)      # {"ว": [2]} replaces that character's tiers
     elastic_sigma_px: float = 4.5                  # smoothness of the elastic field (Simard: 4 at 28 px)
+    uniform: dict | None = None                    # {"rotation_deg": 8, ...}: one profile for every class
+
+    def uniform_profile(self) -> TierProfile | None:
+        return None if self.uniform is None else replace(TIER1, **self.uniform)
 
     def resolved_profiles(self) -> dict[str, TierProfile]:
         out = dict(TIER_PROFILES)
@@ -155,6 +162,8 @@ class AugmentConfig:
         return default_tiers() | {ch: tuple(sorted(set(t))) for ch, t in self.tiers.items()}
 
     def profile_for(self, character: str) -> TierProfile:
+        if self.uniform is not None:
+            return self.uniform_profile()
         tiers = self.resolved_tiers().get(character)
         if not tiers:
             raise KeyError(f"character {character!r} has no augmentation tier; add it to TIER_GROUPS")
@@ -179,11 +188,17 @@ def load_augment_config(path: Path) -> AugmentConfig:
         assert not bad, f"{path.name}: profiles.{name}: unknown field(s) {sorted(bad)}"
     for ch, t in cfg.tiers.items():
         assert t and all(f"tier{x}" in TIER_PROFILES for x in t), f"{path.name}: tiers.{ch}: bad tiers {t}"
+    if cfg.uniform is not None:
+        assert not cfg.profiles and not cfg.tiers, f"{path.name}: uniform can't be combined with profiles / tiers"
+        bad = set(cfg.uniform) - pnames
+        assert not bad, f"{path.name}: uniform: unknown field(s) {sorted(bad)}"
     return cfg
 
 
 def augment_params(cfg: AugmentConfig) -> dict:
     """What a run hashes: every resolved profile and the full character -> tier table."""
+    if cfg.uniform is not None:
+        return dict(elastic_sigma_px=cfg.elastic_sigma_px, uniform=asdict(cfg.uniform_profile()))
     return dict(elastic_sigma_px=cfg.elastic_sigma_px,
                 profiles={k: asdict(v) for k, v in cfg.resolved_profiles().items()},
                 tiers={ch: list(t) for ch, t in cfg.resolved_tiers().items()})
@@ -203,7 +218,7 @@ class TieredAugment(torch.nn.Module):
     def __init__(self, cfg: AugmentConfig, characters: list[str]):
         super().__init__()
         self.characters = list(characters)
-        missing = [c for c in self.characters if not cfg.resolved_tiers().get(c)]
+        missing = [] if cfg.uniform is not None else [c for c in self.characters if not cfg.resolved_tiers().get(c)]
         if missing:
             raise KeyError(f"no augmentation tier for {missing}; add them to TIER_GROUPS")
         self.profiles = [cfg.profile_for(c) for c in self.characters]
