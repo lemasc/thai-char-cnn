@@ -1,8 +1,8 @@
 {
   "dataset": "baseline",
-  "generated_at": "2026-09-24T03:15:56+00:00",
+  "generated_at": "2026-09-24T16:49:44+00:00",
   "versions": {
-    "python": "3.12.3",
+    "python": "3.12.13",
     "numpy": "2.5.3",
     "pandas": "3.0.6",
     "pillow": "12.3.0",
@@ -25,19 +25,19 @@
     "distinct_sha256": 60128,
     "redundant_copies": 2579,
     "cross_class_dup_images": 23,
-    "outliers": 7526,
+    "outliers": 7445,
     "pairs_phash": 1499407,
     "pairs_pixel": 4813351,
     "near_dup_groups": 59650,
     "near_dup_edges": 18242,
     "cross_class_near_dup_groups": 3,
-    "cross_class_near_dup_images": 40
+    "cross_class_near_dup_images": 43
   },
   "timings_s": {
-    "scan_s": 23.8,
-    "phash_sweep_s": 20.5,
-    "pixel_sweep_s": 1.7,
-    "pair_tables_s": 19.6
+    "scan_s": 0.1,
+    "phash_sweep_s": 23.2,
+    "pixel_sweep_s": 1.2,
+    "pair_tables_s": 22.8
   },
   "checks": {
     "every discovered image was scanned": "PASS",
@@ -59,7 +59,7 @@
     "pixel pair table matches its sweep": "PASS",
     "pair tables are upper-triangular": "PASS",
     "cross-class findings match manifest flag": "PASS",
-    "scan order is manifest order (pair indices mean the same rows)": "PASS",
+    "scan order is manifest order (pair indices mean the same rows)": "FAIL",
     "near-dup groups partition the readable images": "PASS",
     "every sha group sits inside one near-dup group": "PASS",
     "near-dup group id is its lowest member sha group": "PASS",
