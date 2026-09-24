@@ -23,7 +23,7 @@ def stable_hash(obj, n: int = 12) -> str:
 
 
 def load_split_config(path: Path) -> dict:
-    cfg = DEFAULT_SPLIT_CONFIG | (json.loads(path.read_text()) if path.exists() else {})
+    cfg = DEFAULT_SPLIT_CONFIG | (json.loads(path.read_text(encoding="utf-8")) if path.exists() else {})
     assert cfg["unit"] == "writer", f"unsupported split unit {cfg['unit']!r}"
     return cfg
 

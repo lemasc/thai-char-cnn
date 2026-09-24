@@ -176,7 +176,7 @@ def load_augment_config(path: Path) -> AugmentConfig:
     stale file from the old flat config can't be silently ignored (`note`, `decided_at` are fine)."""
     if not path.exists():
         return AugmentConfig()
-    raw = json.loads(path.read_text())
+    raw = json.loads(path.read_text(encoding="utf-8"))
     known = {f.name for f in fields(AugmentConfig)}
     unknown = set(raw) - known - {"note", "decided_at"}
     assert not unknown, f"{path.name}: unknown key(s) {sorted(unknown)}; expected {sorted(known)}"

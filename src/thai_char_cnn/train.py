@@ -56,7 +56,7 @@ def code_hash() -> str:
 
 
 def current_split_id(split_dir: Path = SPLIT_DIR) -> str:
-    return json.loads((split_dir / "run.json").read_text())["split_id"]
+    return json.loads((split_dir / "run.json").read_text(encoding="utf-8"))["split_id"]
 
 
 def resolve_config(cfg: dict) -> dict:
@@ -202,7 +202,7 @@ def fit(cfg: dict, split_id: str | None = None, runs_dir: Path = RUNS, split_dir
                              on="class_idx")
 
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "config.json").write_text(json.dumps(cfg | dict(split_id=split_id, run_id=rid), indent=2))
+    (run_dir / "config.json").write_text(json.dumps(cfg | dict(split_id=split_id, run_id=rid), indent=2), encoding="utf-8")
     pd.DataFrame(history).to_csv(run_dir / "history.csv", index=False)
     pc.to_csv(run_dir / "per_class.csv", index=False)
     np.save(run_dir / "confusion.npy", cm)
@@ -221,7 +221,7 @@ def fit(cfg: dict, split_id: str | None = None, runs_dir: Path = RUNS, split_dir
                    n_params=sum(p.numel() for p in model.parameters()), device=device,
                    train_time_s=round(train_time, 1))
     # metrics.json last: its presence is what marks the run finished
-    (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     if verbose:
         print(f"[{cfg.get('name', rid)}] best epoch {best_epoch}: val macro-F1 {metrics['val_macro_f1']:.4f} "
               f"-> {run_dir.relative_to(runs_dir.parent)}")
@@ -232,8 +232,8 @@ def load_runs(runs_dir: Path = RUNS) -> pd.DataFrame:
     """One row per finished run: its metrics plus its config (prefixed `cfg.`)."""
     rows = []
     for m in sorted(runs_dir.glob("*/metrics.json")):
-        cfg = json.loads((m.parent / "config.json").read_text())
-        rows.append(json.loads(m.read_text()) | {f"cfg.{k}": v for k, v in cfg.items()
+        cfg = json.loads((m.parent / "config.json").read_text(encoding="utf-8"))
+        rows.append(json.loads(m.read_text(encoding="utf-8")) | {f"cfg.{k}": v for k, v in cfg.items()
                                                  if k not in ("split_id", "run_id", "augment_params")}
                     | {"code_hash": cfg.get("code_hash", "")})
     return pd.DataFrame(rows)
