@@ -1,6 +1,6 @@
 # thai-char-cnn
 
-Thai handwritten character classification: dataset exploration, a writer-level train/val split,
+Thai character classification: dataset exploration, a filename-group train/val split,
 and a baseline CNN.
 
 ```bash
@@ -45,7 +45,7 @@ Sole writer of `data/{name}/manifest/`:
 
 | File | Contents |
 | --- | --- |
-| `images.csv` | Per-image index — the canonical table. `path` is relative to `raw/`; row order is the index used by the pair tables. `near_dup_group_id` is the leakage group a split must keep whole. `writer_id` / `session` / `sheet` are parsed from the file name (`{src}_{num}{session}_{sheet}_{idx}.jpg`, `Copy of ` stripped); `writer_id` is the unit the split is made on. |
+| `images.csv` | Per-image index — the canonical table. `path` is relative to `raw/`; row order is the index used by the pair tables. `near_dup_group_id` is the leakage group a split must keep whole. `writer_id` / `session` / `sheet` are parsed from the file name (`{src}_{num}{session}_{sheet}_{idx}.jpg`, `Copy of ` stripped). `writer_id` is a retained schema name for the `{src}_{num}` filename group, not a verified person identifier. |
 | `classes.csv` | Per-class counts (raw and exact-dup-collapsed), geometry and brightness stats |
 | `folder_inventory.csv`, `non_images.csv` | What is on disk, including stray non-image files |
 | `findings_cross_class_exact.csv` | Byte-identical images under two different labels — an adjudication queue |
@@ -72,25 +72,26 @@ signals, a cross-class duplicate adjudicator, and an outlier browser.
 uv run jupyter lab notebooks/03_split.ipynb
 ```
 
-Applies the rulings in `configs/` to get one label per image, then splits **by writer** (parsed from
-the file name), so validation measures handwriting the model has never seen. There is no test split:
-the instructor holds the real test set, and val is used for model selection, so its score is
-optimistic. Classes with fewer than `min_val_class_images` distinct images go wholly to train and
-are flagged *not validated*. They are the only images allowed to break writer purity, and they are
-counted.
+Applies the rulings in `configs/` to get one label per image, then splits by the `{src}_{num}`
+filename group (stored as `writer_id`). This evaluates held-out filename groups only; it does not
+establish performance on unseen handwriting, fonts, or the instructor's hidden-test distribution.
+There is no test split: the instructor holds the real test set, and val is used for model selection,
+so its score is optimistic. Classes with fewer than `min_val_class_images` distinct images go wholly
+to train and are flagged *not validated*. They are the only images allowed to break filename-group
+purity, and they are counted.
 
-The writer assignment is **frozen** in `split/writers.csv` and reused while `configs/split.json` is
-unchanged. New rulings then move only the images they touch, never whole writers. Byte-identical
-glyphs shared across writers (1,000 SHA groups, mostly tiny bars that many writers drew
-identically) are *reported* as cross-split twins, not enforced: joining writers through them
-would chain 37 of 52 writers into one block. Runs in a few seconds.
+The filename-group assignment is **frozen** in `split/writers.csv` and reused while
+`configs/split.json` is unchanged. New rulings then move only the images they touch, never whole
+groups. Byte-identical glyphs shared across filename groups (1,000 SHA groups) are *reported* as
+cross-split twins, not enforced: joining groups through them would chain 37 of 52 groups into one
+block. Their source relationship is unknown. Runs in a few seconds.
 
 Sole writer of `data/{name}/split/` (tracked):
 
 | File | Contents |
 | --- | --- |
-| `writers.csv` | writer → `train`/`val`, with the hash of the split config it was built under |
-| `images.csv` | One row per manifest image: `writer_id`, `orig_class`, `label_class`, `class_idx`, `split`, `included`, `exclude_reason`, `ruling_source`, `forced_train`, `is_split_canonical` (one row per SHA, label and split — copies count once per side) |
+| `writers.csv` | filename group (`writer_id`, retained as a schema name) → `train`/`val`, with the hash of the split config it was built under |
+| `images.csv` | One row per manifest image: `writer_id` (filename group), `orig_class`, `label_class`, `class_idx`, `split`, `included`, `exclude_reason`, `ruling_source`, `forced_train`, `is_split_canonical` (one row per SHA, label and split — copies count once per side) |
 | `classes.csv` | The fixed class index (`class_idx` 0..71 from the audit's folder list, never renumbered by rulings), `train_n`, `val_n`, `status` ∈ `validated` / `weak` (val < 5) / `not_validated` |
 | `run.json` | `split_id` (changes exactly when what a model trains or is scored on changes), counts, search summary, self-checks |
 
@@ -124,7 +125,7 @@ on the experiment named by `FOCUS`.
 | `near_dup.json` | 02 | 01 | Near-duplicate RMS threshold |
 | `cross_class_rulings.csv` | 02 | 03 | Per exact cross-class SHA group: `reassign` to `correct_class`, or `hold` (excluded) |
 | `image_rulings.csv` | 02 (optional) | 03 | Per image: `path, ruling, correct_class, source, note`, `ruling` ∈ `keep` / `reassign` / `drop`. Overrides group rulings; a missing file or row means keep |
-| `split.json` | by hand | 03 | `unit` (`writer`), `val_fraction`, `min_val_class_images`, `seed`, `search_iters`, `unruled_cross_class` (`drop` or `keep`: what happens to an image in a near-dup group that still carries two labels after the rulings) |
+| `split.json` | by hand | 03 | `unit` (`writer`, retained schema name for filename-group splitting), `val_fraction`, `min_val_class_images`, `seed`, `search_iters`, `unruled_cross_class` (`drop` or `keep`: what happens to an image in a near-dup group that still carries two labels after the rulings) |
 | `augment.json` | `05_augment_preview.py` (planned; optional) | 04 | Any `AugmentConfig` field (`rotation_deg`, `shear_deg`, `scale_min`, `scale_max`, `translate_frac`, `stroke_p`, `elastic_p`, `elastic_alpha`, `elastic_sigma`). Missing → conservative defaults, with stroke and elastic off |
 
 ## Notes from the current `baseline` audit

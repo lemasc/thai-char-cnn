@@ -211,8 +211,8 @@ def _(mo):
     mo.md(r"""
     ## 1 · Every class at a glance
 
-    Mean image per class, contrast-stretched. Averaging up to 150 samples cancels individual
-    handwriting and leaves the canonical glyph — this is the primary evidence for §3.
+    Mean image per class, contrast-stretched. Averaging up to 150 samples suppresses within-class
+    variation and leaves the canonical glyph — this is the primary evidence for §3.
     """)
     return
 
@@ -559,7 +559,7 @@ def _(Image, class_char, images, load_gray, mo, np, pair_page, png, shown):
 def _(mo):
     mo.md(r"""
     > **Decision: RMS is the near-duplicate signal, not pHash.** These are isolated single-character
-    > glyphs — simple enough that two different writers' strokes can coincidentally land close in
+    > glyphs — simple enough that distinct glyphs can coincidentally land close in
     > RMS by chance, and pHash's distance is coarse (quantized in steps of 2) and its DCT resize can
     > collapse distinct simple glyphs together. pHash is a candidate filter only; RMS makes the call.
     >
