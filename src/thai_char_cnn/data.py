@@ -84,7 +84,7 @@ class ImageSet(Dataset):
         j = self.idx[i]
         px = self.data.pixels[j]
         if self.transform is not None:
-            px = self.transform(px)
+            px = self.transform(px, int(self.data.y[j]))      # augmentation is tiered by class
         x, g = self.data.normalise(px, self.data.geo[j])
         return x, g, self.data.y[j]
 

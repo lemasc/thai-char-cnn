@@ -122,7 +122,9 @@ def fit(cfg: dict, split_id: str | None = None, runs_dir: Path = RUNS, split_dir
     validated = (classes.status == "validated").to_numpy()
 
     tr_idx, va_idx = data.idx["train"], data.idx["val"]
-    transform = build_train_transform(load_augment_config(CONFIGS / "augment.json")) if cfg["augment"] else None
+    assert (classes.class_idx.to_numpy() == np.arange(n_classes)).all(), "class_idx must be 0..n-1"
+    transform = (build_train_transform(load_augment_config(CONFIGS / "augment.json"), classes.character.tolist())
+                 if cfg["augment"] else None)
     sampler = make_sampler(data.y[tr_idx].numpy(), cfg["sampler"], cfg["seed"])
     workers = cfg.get("num_workers", min(8, os.cpu_count() or 1))
     loader = DataLoader(data.dataset("train", transform), batch_size=cfg["batch_size"],
