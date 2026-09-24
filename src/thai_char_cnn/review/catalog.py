@@ -141,14 +141,16 @@ class Catalog:
             return im.convert("L")
 
     def render(self, path: str, cell: int = 96, true_size: bool = False, state: str = "",
-               border: int = 4) -> Image.Image:
+               border: int = 4, pad: int = 10) -> Image.Image:
         """The glyph on white, NEAREST-upscaled so strokes stay crisp, framed in its state colour.
 
         `true_size` scales every glyph by the same factor, so a tone mark looks small next to a
         consonant -- the absolute-size cue that separates ่ from ๅ, which letterboxing erases.
+        `pad` keeps the glyph's ink clear of the frame so it reads at a glance in the gallery grid,
+        without having to hover or open the image full-size.
         """
         g = self.gray(path)
-        inner = cell - 2 * border - 4
+        inner = cell - 2 * border - 2 * pad
         w, h = g.size
         s = inner / max(TRUE_SIZE_REF, w, h) if true_size else inner / max(w, h)
         g = g.resize((max(1, round(w * s)), max(1, round(h * s))), Image.Resampling.NEAREST)
@@ -158,7 +160,7 @@ class Catalog:
 
     def thumb(self, path: str, cell: int = 96, true_size: bool = False, state: str = "") -> str:
         """`render` cached as a PNG under cache/review_thumbs/, returned as a file path for gr.Gallery."""
-        key = hashlib.sha1(f"{path}|{cell}|{true_size}|{state}".encode()).hexdigest()[:20]
+        key = hashlib.sha1(f"{path}|{cell}|{true_size}|{state}|v2".encode()).hexdigest()[:20]
         f = self.cache / "review_thumbs" / f"{key}.png"
         if not f.exists():
             f.parent.mkdir(parents=True, exist_ok=True)

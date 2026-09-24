@@ -39,7 +39,8 @@ CLASS_CHOICES = [(lab, int(f)) for f, lab in zip(CAT.classes.class_folder, CAT.c
 DOWNLOADS = Path(tempfile.mkdtemp(prefix="audit_dl_"))
 
 MARK = {"ok": "✓", "flag": "⚑", "wrong_class": "→", "drop": "✗", "unsure": "?", "conflict": "⚠"}
-ORDERS = ["model doubt first", "outliers first", "random", "file name"]
+ORDERS = ["model doubt first", "like confirmed wrong", "outliers first", "random", "file name"]
+BAD = ["wrong_class", "drop"]
 FILTERS = ["not reviewed by me", "not reviewed by anyone", "all", "flagged", "conflicts",
            "wrong class / drop", "unsure", "model disagrees", "outliers"]
 
@@ -64,7 +65,19 @@ def reviewer(name: str, request: gr.Request | None, required: bool = True) -> st
 
 # ---- page building --------------------------------------------------------------------------
 
-def page_list(folder: int, order: str, filt: str, me: str) -> list[int]:
+def like_wrong(rows: np.ndarray, bad: np.ndarray, good: np.ndarray, k: int = 5) -> np.ndarray:
+    """how much closer each image sits to the team's confirmed wrong-class / drop images of its
+    folder than to the confirmed OK ones (mean cosine of the k nearest of each). A folder label the
+    model has memorised hides from "model doubt first"; this finds it from the verdicts instead."""
+    def near(ref):
+        s = IX.emb[rows] @ IX.emb[ref].T
+        n = min(k, s.shape[1])
+        return -np.partition(-s, n - 1, axis=1)[:, :n].mean(1)
+    return near(bad) - near(good) if len(good) else near(bad)
+
+
+def page_list(folder: int, order: str, filt: str, me: str) -> tuple[list[int], str]:
+    """item indices in display order, plus a note when the order had to fall back"""
     idx = BY_FOLDER[int(folder)]
     it = ITEMS.iloc[idx]
     cur = STORE.current(folder=int(folder))
@@ -78,13 +91,19 @@ def page_list(folder: int, order: str, filt: str, me: str) -> list[int]:
         "all": np.ones(len(it), bool),
         "flagged": state == "flag",
         "conflicts": state == "conflict",
-        "wrong class / drop": np.isin(state, ["wrong_class", "drop"]),
+        "wrong class / drop": np.isin(state, BAD),
         "unsure": state == "unsure",
         "model disagrees": IX.top_folder[rows, 0] != int(folder),
         "outliers": (it.outlier != "").to_numpy(),
     }[filt]
+    bad, good = rows[np.isin(state, BAD)], rows[state == "ok"]
+    note = ""
     idx, rows, it = idx[keep], rows[keep], it[keep]
-    if order == "model doubt first":
+    if order == "like confirmed wrong" and len(bad):
+        o = np.argsort(-like_wrong(rows, bad, good), kind="stable")
+    elif order in ("model doubt first", "like confirmed wrong"):
+        if order != "model doubt first":
+            note = " · *no confirmed wrong class / drop in this class yet — ordered by model doubt*"
         o = np.argsort(IX.p_folder[rows], kind="stable")
     elif order == "outliers first":
         o = np.lexsort((IX.p_folder[rows], (it.outlier == "").to_numpy()))
@@ -92,7 +111,7 @@ def page_list(folder: int, order: str, filt: str, me: str) -> list[int]:
         o = np.random.default_rng(42 + int(folder)).permutation(len(idx))
     else:
         o = np.argsort(it.file_name.to_numpy(), kind="stable")
-    return idx[o].tolist()
+    return idx[o].tolist(), note
 
 
 def caption(k: int, mine: dict, cons: pd.DataFrame) -> str:
@@ -144,12 +163,12 @@ def class_header(folder: int) -> str:
 
 def load_page(folder, order, filt, page, size, true_size, name, request: gr.Request):
     me = reviewer(name, request, required=False)
-    lst = page_list(folder, order, filt, me)
+    lst, note = page_list(folder, order, filt, me)
     size = int(size)
     n_pages = max(1, -(-len(lst) // size))
     page = int(min(max(0, page), n_pages - 1))
     items = lst[page * size:(page + 1) * size]
-    info = f"page **{page + 1} / {n_pages}** · {len(lst):,} images match *{filt}*"
+    info = f"page **{page + 1} / {n_pages}** · {len(lst):,} images match *{filt}*" + note
     return render_gallery(items, me, true_size), items, page, info, class_header(folder)
 
 
