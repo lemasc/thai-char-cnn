@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "altair>=5.5.0",
+    "gradio>=6.28.0",
     "imagehash>=4.3.2",
     "jupyter>=1.1.1",
     "marimo>=0.24.2",
@@ -30,10 +31,10 @@ explicit = true
 
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu126", marker = "sys_platform == 'linux'" },
 ]
 torchvision = [
-  { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu126", marker = "sys_platform == 'linux'" },
 ]
 
 
@@ -53,3 +54,5 @@ ignore = [
 # marimo encodes a cell's dependencies in the function signature and renders the
 # last bare expression -- both look like defects to a linter but are required syntax.
 "notebooks/02_visual_check.py" = ["B018", "F841"]
+# Gradio lays out UI with nested context managers; merging them would hide the layout tree.
+"apps/audit.py" = ["SIM117"]

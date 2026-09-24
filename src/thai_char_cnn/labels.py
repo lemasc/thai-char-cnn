@@ -30,6 +30,8 @@ def _read(path: Path, cols: list[str]) -> pd.DataFrame:
 
 def load_image_rulings(configs: Path) -> pd.DataFrame:
     r = _read(configs / "image_rulings.csv", IMAGE_RULING_COLS)
+    # a blank ruling is a deferred row, not a decision -- counting it would act as `keep`
+    r = r[r.ruling.notna()].reset_index(drop=True)
     bad = set(r.ruling.dropna()) - IMAGE_RULINGS
     assert not bad, f"image_rulings.csv: unknown ruling(s) {bad}"
     assert r.path.is_unique, "image_rulings.csv: a path is ruled twice"

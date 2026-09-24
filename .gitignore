@@ -11,6 +11,9 @@ data/**/manifest/pairs/
 # near-duplicate candidate pairs: ~14MB, rebuilt by 01_dataset_audit.ipynb in ~21s
 data/**/manifest/pairs/
 
+# audit app database (its log is exported to configs/review_log.csv)
+data/**/review/
+
 # marimo session/layout scratch
 __marimo__/
 
@@ -19,3 +22,6 @@ runs/
 
 # jupyter autosave
 .ipynb_checkpoints/
+
+# gradio runtime cache (apps/audit.py)
+.gradio/

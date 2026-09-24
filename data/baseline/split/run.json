@@ -1,7 +1,7 @@
 {
   "dataset": "baseline",
-  "split_id": "49bb16a21863",
-  "generated_at": "2026-09-23T16:22:18+00:00",
+  "split_id": "d0a0d7ada85a",
+  "generated_at": "2026-09-24T13:54:16+00:00",
   "config": {
     "unit": "writer",
     "val_fraction": 0.2,
@@ -35,19 +35,20 @@
   },
   "counts": {
     "manifest_images": 62707,
-    "included": 62663,
-    "excluded": 44,
+    "included": 62480,
+    "excluded": 227,
     "excluded_by_reason": {
-      "unruled_cross_class": 40,
+      "image_ruling_drop": 184,
+      "unruled_cross_class": 39,
       "cross_class_hold": 4
     },
-    "relabelled": 0,
+    "relabelled": 1101,
     "writers": 52,
     "val_writers": 9,
-    "train_images": 48535,
-    "val_images": 12033,
+    "train_images": 48400,
+    "val_images": 11996,
     "forced_train": 27,
-    "val_exact_twins_in_train": 467,
+    "val_exact_twins_in_train": 466,
     "classes": 72,
     "classes_by_status": {
       "validated": 56,
@@ -79,14 +80,14 @@
     "every manifest row appears once": "PASS",
     "every included row has a split": "PASS",
     "excluded rows have no split and a reason": "PASS",
-    "writer purity holds except counted tiny-class images": "PASS",
+    "filename-group purity holds except counted tiny-class images": "PASS",
     "class_idx covers the audit's folders, 0..C-1": "PASS",
     "every included label is a known class": "PASS",
     "no class is val-only": "PASS",
     "tiny classes have no val images": "PASS",
     "one canonical row per (sha, label, split)": "PASS",
     "class counts match canonical rows": "PASS",
-    "writer search is deterministic": "PASS",
+    "filename-group search is deterministic": "PASS",
     "split_id reproduces from the written files": "PASS",
     "raw/ untouched": "PASS"
   }
