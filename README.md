@@ -24,7 +24,8 @@ Exploration is split by the *kind* of work, not by topic:
 > **`01_dataset_audit.ipynb` owns derived data. `02_visual_check.py` owns human decisions.**
 > Decisions flow back as small files under `configs/`, which the audit reads on its next run.
 > `03_split.ipynb` applies those decisions to produce the split; `04_train.ipynb` trains on it.
-> Logic shared between notebooks lives in `src/thai_char_cnn/`.
+> Logic shared between notebooks lives in `src/thai_char_cnn/`. The shared review app
+> (`apps/audit.py`) is a second writer of human decisions and works the same way.
 
 ### 1 · `notebooks/01_dataset_audit.ipynb` — arithmetic & logical checks
 
@@ -117,6 +118,39 @@ on the experiment named by `FOCUS`.
 `runs/` is gitignored. Each run holds `config.json`, `history.csv`, `metrics.json`,
 `per_class.csv`, `confusion.npy`, `val_predictions.csv`, `model.pt`.
 
+### Audit app · `apps/audit.py` — shared image review
+
+```bash
+uv run python -m thai_char_cnn.review.index        # once: similarity index from the best run (~15 s)
+uv run python apps/audit.py --host 0.0.0.0         # one server, colleagues open http://<host>:7860
+AUDIT_USERS="alice:pw,bob:pw" uv run python apps/audit.py --host 0.0.0.0   # with logins
+AUDIT_USERS="alice:pw,bob:pw" uv run python apps/audit.py --share          # public *.gradio.live link
+```
+
+A Gradio app for several reviewers at once, separate from the notebooks. Pick a class, then:
+
+- **Scan:** click a thumbnail to flag it ⚑, then *Mark rest of page OK* to move on.
+- **Inspect:** open an image to mark it ok, wrong class (with the correct class), drop or unsure.
+  The panel shows the best run's top-5 predictions (marked when the image was in its training
+  set) and the class prototypes.
+- **Find similar:** CNN-feature or 16×16 pixel neighbours, with a class vote among them. Use it
+  to settle ambiguous glyphs.
+
+The *Statistics* tab shows how far each class has been reviewed, the verdict counts, conflicts,
+proposed reassignments, per-reviewer agreement and a status for each class that reviewers set by
+hand (`not_started` / `in_progress` / `needs_review` / `completed`).
+
+Every click is saved at once to `data/{name}/review/review.db`, an append-only SQLite log that
+records who did what and when. The file is untracked and backed up to `review.db.bak` on start.
+A ⚑ belongs to the reviewer who set it and stays until they replace it with a verdict.
+
+Nothing reaches the pipeline until someone presses **Export** on the *Conflicts & export* tab.
+Export writes the verdicts reviewers agree on to `configs/image_rulings.csv`: by default at
+least two must agree, and exact copies in the same folder are included. Rows from other tools
+are kept. Then re-run 03.
+
+Shared logic lives in `src/thai_char_cnn/review/`.
+
 ### Decision files under `configs/`
 
 | File | Written by | Read by | Contents |
@@ -124,7 +158,8 @@ on the experiment named by `FOCUS`.
 | `class_labels.csv` | 02 | 03, 04 | Folder → Thai character |
 | `near_dup.json` | 02 | 01 | Near-duplicate RMS threshold |
 | `cross_class_rulings.csv` | 02 | 03 | Per exact cross-class SHA group: `reassign` to `correct_class`, or `hold` (excluded) |
-| `image_rulings.csv` | 02 (optional) | 03 | Per image: `path, ruling, correct_class, source, note`, `ruling` ∈ `keep` / `reassign` / `drop`. Overrides group rulings; a missing file or row means keep |
+| `image_rulings.csv` | 02, audit app (optional) | 03 | Per image: `path, ruling, correct_class, source, note`, `ruling` ∈ `keep` / `reassign` / `drop`. Overrides group rulings; a missing file or row, or a blank `ruling`, means keep. Each writer replaces only its own rows (`source`); the audit app's are `audit_app` |
+| `review_log.csv`, `review_class_status.csv` | audit app (on export) | people | The review DB's full decision log and class-status log, as CSV, so the reviews are tracked in git |
 | `split.json` | by hand | 03 | `unit` (`writer`, retained schema name for filename-group splitting), `val_fraction`, `min_val_class_images`, `seed`, `search_iters`, `unruled_cross_class` (`drop` or `keep`: what happens to an image in a near-dup group that still carries two labels after the rulings) |
 | `augment.json` | `05_augment_preview.py` (planned; optional) | 04 | Any `AugmentConfig` field (`rotation_deg`, `shear_deg`, `scale_min`, `scale_max`, `translate_frac`, `stroke_p`, `elastic_p`, `elastic_alpha`, `elastic_sigma`). Missing → conservative defaults, with stroke and elastic off |
 
