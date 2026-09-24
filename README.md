@@ -1,6 +1,6 @@
 # thai-char-cnn
 
-Thai handwritten character classification: dataset exploration, a writer-level train/val split,
+Thai character classification: dataset exploration, a filename-group train/val split,
 and a baseline CNN.
 
 ```bash
@@ -24,7 +24,8 @@ Exploration is split by the *kind* of work, not by topic:
 > **`01_dataset_audit.ipynb` owns derived data. `02_visual_check.py` owns human decisions.**
 > Decisions flow back as small files under `configs/`, which the audit reads on its next run.
 > `03_split.ipynb` applies those decisions to produce the split; `04_train.ipynb` trains on it.
-> Logic shared between notebooks lives in `src/thai_char_cnn/`.
+> Logic shared between notebooks lives in `src/thai_char_cnn/`. The shared review app
+> (`apps/audit.py`) is a second writer of human decisions and works the same way.
 
 ### 1 · `notebooks/01_dataset_audit.ipynb` — arithmetic & logical checks
 
@@ -45,7 +46,7 @@ Sole writer of `data/{name}/manifest/`:
 
 | File | Contents |
 | --- | --- |
-| `images.csv` | Per-image index — the canonical table. `path` is relative to `raw/`; row order is the index used by the pair tables. `near_dup_group_id` is the leakage group a split must keep whole. `writer_id` / `session` / `sheet` are parsed from the file name (`{src}_{num}{session}_{sheet}_{idx}.jpg`, `Copy of ` stripped); `writer_id` is the unit the split is made on. |
+| `images.csv` | Per-image index — the canonical table. `path` is relative to `raw/`; row order is the index used by the pair tables. `near_dup_group_id` is the leakage group a split must keep whole. `writer_id` / `session` / `sheet` are parsed from the file name (`{src}_{num}{session}_{sheet}_{idx}.jpg`, `Copy of ` stripped). `writer_id` is a retained schema name for the `{src}_{num}` filename group, not a verified person identifier. |
 | `classes.csv` | Per-class counts (raw and exact-dup-collapsed), geometry and brightness stats |
 | `folder_inventory.csv`, `non_images.csv` | What is on disk, including stray non-image files |
 | `findings_cross_class_exact.csv` | Byte-identical images under two different labels — an adjudication queue |
@@ -72,25 +73,26 @@ signals, a cross-class duplicate adjudicator, and an outlier browser.
 uv run jupyter lab notebooks/03_split.ipynb
 ```
 
-Applies the rulings in `configs/` to get one label per image, then splits **by writer** (parsed from
-the file name), so validation measures handwriting the model has never seen. There is no test split:
-the instructor holds the real test set, and val is used for model selection, so its score is
-optimistic. Classes with fewer than `min_val_class_images` distinct images go wholly to train and
-are flagged *not validated*. They are the only images allowed to break writer purity, and they are
-counted.
+Applies the rulings in `configs/` to get one label per image, then splits by the `{src}_{num}`
+filename group (stored as `writer_id`). This evaluates held-out filename groups only; it does not
+establish performance on unseen handwriting, fonts, or the instructor's hidden-test distribution.
+There is no test split: the instructor holds the real test set, and val is used for model selection,
+so its score is optimistic. Classes with fewer than `min_val_class_images` distinct images go wholly
+to train and are flagged *not validated*. They are the only images allowed to break filename-group
+purity, and they are counted.
 
-The writer assignment is **frozen** in `split/writers.csv` and reused while `configs/split.json` is
-unchanged. New rulings then move only the images they touch, never whole writers. Byte-identical
-glyphs shared across writers (1,000 SHA groups, mostly tiny bars that many writers drew
-identically) are *reported* as cross-split twins, not enforced: joining writers through them
-would chain 37 of 52 writers into one block. Runs in a few seconds.
+The filename-group assignment is **frozen** in `split/writers.csv` and reused while
+`configs/split.json` is unchanged. New rulings then move only the images they touch, never whole
+groups. Byte-identical glyphs shared across filename groups (1,000 SHA groups) are *reported* as
+cross-split twins, not enforced: joining groups through them would chain 37 of 52 groups into one
+block. Their source relationship is unknown. Runs in a few seconds.
 
 Sole writer of `data/{name}/split/` (tracked):
 
 | File | Contents |
 | --- | --- |
-| `writers.csv` | writer → `train`/`val`, with the hash of the split config it was built under |
-| `images.csv` | One row per manifest image: `writer_id`, `orig_class`, `label_class`, `class_idx`, `split`, `included`, `exclude_reason`, `ruling_source`, `forced_train`, `is_split_canonical` (one row per SHA, label and split — copies count once per side) |
+| `writers.csv` | filename group (`writer_id`, retained as a schema name) → `train`/`val`, with the hash of the split config it was built under |
+| `images.csv` | One row per manifest image: `writer_id` (filename group), `orig_class`, `label_class`, `class_idx`, `split`, `included`, `exclude_reason`, `ruling_source`, `forced_train`, `is_split_canonical` (one row per SHA, label and split — copies count once per side) |
 | `classes.csv` | The fixed class index (`class_idx` 0..71 from the audit's folder list, never renumbered by rulings), `train_n`, `val_n`, `status` ∈ `validated` / `weak` (val < 5) / `not_validated` |
 | `run.json` | `split_id` (changes exactly when what a model trains or is scored on changes), counts, search summary, self-checks |
 
@@ -116,6 +118,39 @@ on the experiment named by `FOCUS`.
 `runs/` is gitignored. Each run holds `config.json`, `history.csv`, `metrics.json`,
 `per_class.csv`, `confusion.npy`, `val_predictions.csv`, `model.pt`.
 
+### Audit app · `apps/audit.py` — shared image review
+
+```bash
+uv run python -m thai_char_cnn.review.index        # once: similarity index from the best run (~15 s)
+uv run python apps/audit.py --host 0.0.0.0         # one server, colleagues open http://<host>:7860
+AUDIT_USERS="alice:pw,bob:pw" uv run python apps/audit.py --host 0.0.0.0   # with logins
+AUDIT_USERS="alice:pw,bob:pw" uv run python apps/audit.py --share          # public *.gradio.live link
+```
+
+A Gradio app for several reviewers at once, separate from the notebooks. Pick a class, then:
+
+- **Scan:** click a thumbnail to flag it ⚑, then *Mark rest of page OK* to move on.
+- **Inspect:** open an image to mark it ok, wrong class (with the correct class), drop or unsure.
+  The panel shows the best run's top-5 predictions (marked when the image was in its training
+  set) and the class prototypes.
+- **Find similar:** CNN-feature or 16×16 pixel neighbours, with a class vote among them. Use it
+  to settle ambiguous glyphs.
+
+The *Statistics* tab shows how far each class has been reviewed, the verdict counts, conflicts,
+proposed reassignments, per-reviewer agreement and a status for each class that reviewers set by
+hand (`not_started` / `in_progress` / `needs_review` / `completed`).
+
+Every click is saved at once to `data/{name}/review/review.db`, an append-only SQLite log that
+records who did what and when. The file is untracked and backed up to `review.db.bak` on start.
+A ⚑ belongs to the reviewer who set it and stays until they replace it with a verdict.
+
+Nothing reaches the pipeline until someone presses **Export** on the *Conflicts & export* tab.
+Export writes the verdicts reviewers agree on to `configs/image_rulings.csv`: by default at
+least two must agree, and exact copies in the same folder are included. Rows from other tools
+are kept. Then re-run 03.
+
+Shared logic lives in `src/thai_char_cnn/review/`.
+
 ### Decision files under `configs/`
 
 | File | Written by | Read by | Contents |
@@ -124,6 +159,7 @@ on the experiment named by `FOCUS`.
 | `near_dup.json` | 02 | 01 | Near-duplicate RMS threshold |
 | `cross_class_rulings.csv` | 02 | 03 | Per exact cross-class SHA group: `reassign` to `correct_class`, or `hold` (excluded) |
 | `image_rulings.csv` | 02 (optional) | 03 | Per image: `path, ruling, correct_class, source, note`, `ruling` ∈ `keep` / `reassign` / `drop`. Overrides group rulings; a missing file or row means keep |
+| `review_log.csv`, `review_class_status.csv` | audit app (on export) | people | The review DB's full decision log and class-status log, as CSV, so the reviews are tracked in git |
 | `split.json` | by hand | 03 | `unit` (`writer`), `val_fraction`, `min_val_class_images`, `seed`, `search_iters`, `unruled_cross_class` (`drop` or `keep`: what happens to an image in a near-dup group that still carries two labels after the rulings) |
 | `augment.json` | `05_augment_preview.py` (planned; optional) | 04 | Overrides on the per-class augmentation tiers in `augment.py`: `profiles` (`{"tier2": {"rotation_deg": 4}}`, any `TierProfile` field), `tiers` (`{"ว": [2]}` replaces a character's tiers), `elastic_sigma_px`. Unknown keys are an error. Missing → the tier defaults (1 robust, 2 hook/loop pairs, 3 ascender/descender, 4 marks, 5 า/ๅ; a character in several tiers gets the most conservative value of each field). `uniform` (any `TierProfile` field) instead gives every class one Tier 1-based profile, no tiering; it can't be combined with `profiles` / `tiers`. An experiment can read another file in `configs/` with `augment_file` (e.g. `augment_uniform.json`, the tiering control) |
 
