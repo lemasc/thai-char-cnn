@@ -135,14 +135,23 @@ def caption(k: int, mine: dict, cons: pd.DataFrame) -> str:
     return " ".join(parts) or f"{r.width}×{r.height}"
 
 
-def render_gallery(page_items: list[int], me: str, true_size: bool, cell: int = 96):
+def render_gallery(page_items: list[int], me: str, true_size: bool, selected: set = frozenset(), cell: int = 96):
     paths = ITEMS.path.iloc[page_items].tolist()
     cur = STORE.current(paths=paths)
     cons = consensus(cur)
     m = cur[cur.reviewer == me]
     mine = {p: (v, pc) for p, v, pc in zip(m.path, m.verdict, m.proposed_class, strict=True)}
-    return [(CAT.thumb(p, cell, true_size, mine.get(p, ("",))[0]), caption(k, mine, cons))
+    return [(CAT.thumb(p, cell, true_size, mine.get(p, ("",))[0], k in selected), caption(k, mine, cons))
             for k, p in zip(page_items, paths, strict=True)]
+
+
+def selection_panel(selected: list[int], me: str, true_size: bool, proposed) -> list:
+    """The images currently picked for a bulk action, next to the class they'd be reassigned to --
+    so a batch "wrong class" stays visually verifiable before it's applied to everything at once."""
+    tiles = render_gallery(selected, me, true_size, set(selected)) if selected else []
+    if proposed is not None and (p := CAT.prototype_image(int(proposed), 144)) is not None:
+        tiles = [(p, f"→ target: {lab(int(proposed))}")] + tiles
+    return tiles
 
 
 def class_header(folder: int) -> str:
@@ -161,7 +170,7 @@ def class_header(folder: int) -> str:
             + ("" if s is None else f" (by {s.reviewer})" + (f" — {s.note}" if s.note else "")))
 
 
-def load_page(folder, order, filt, page, size, true_size, name, request: gr.Request):
+def load_page(folder, order, filt, page, size, true_size, name, selected, request: gr.Request):
     me = reviewer(name, request, required=False)
     lst, note = page_list(folder, order, filt, me)
     size = int(size)
@@ -169,7 +178,7 @@ def load_page(folder, order, filt, page, size, true_size, name, request: gr.Requ
     page = int(min(max(0, page), n_pages - 1))
     items = lst[page * size:(page + 1) * size]
     info = f"page **{page + 1} / {n_pages}** · {len(lst):,} images match *{filt}*" + note
-    return render_gallery(items, me, true_size), items, page, info, class_header(folder)
+    return render_gallery(items, me, true_size, set(selected)), items, page, info, class_header(folder)
 
 
 # ---- detail panel ---------------------------------------------------------------------------
@@ -205,7 +214,7 @@ def compare(k, proposed):
 def detail(k, me: str):
     """big image, info, model, decisions, proposed default, compare strip"""
     if k is None:
-        return None, "*Switch to **Inspect** and click an image.*", "", "", None, []
+        return None, "*Switch to **Select** and click an image.*", "", "", None, []
     r = ITEMS.iloc[int(k)]
     info = [f"**{lab(r.folder)}** · `{r.path}` · {r.width}×{r.height} px · filename group `{r.writer or '?'}`"
             f" · split **{r.split or '?'}**" + (f" · {r.n_copies} identical copies in this folder" if r.n_copies > 1 else "")]
@@ -272,22 +281,23 @@ CSS = """
 /* By default the caption is an absolutely-positioned badge over the image's bottom-right corner,
    hiding it until you hover (opacity only drops on hover). Lay the thumbnail out as a column
    instead so the caption sits in its own strip below the glyph -- nothing is ever covered. */
-#gallery .thumbnail-lg, #neigh .thumbnail-lg { display: flex; flex-direction: column; }
-#gallery .thumbnail-lg > img, #neigh .thumbnail-lg > img { flex: 1 1 auto; min-height: 0; width: 100%; }
-#gallery .caption-label, #neigh .caption-label {
+#gallery .thumbnail-lg, #neigh .thumbnail-lg, #selection .thumbnail-lg { display: flex; flex-direction: column; }
+#gallery .thumbnail-lg > img, #neigh .thumbnail-lg > img, #selection .thumbnail-lg > img { flex: 1 1 auto; min-height: 0; width: 100%; }
+#gallery .caption-label, #neigh .caption-label, #selection .caption-label {
   position: static; flex: 0 0 auto; width: 100%; max-width: 100%; margin: 0; border-radius: 0;
   border-left: none; box-sizing: border-box; text-align: center; font-size: 12px;
 }
-#gallery .thumbnail-lg:hover .caption-label, #neigh .thumbnail-lg:hover .caption-label { opacity: 1; }
+#gallery .thumbnail-lg:hover .caption-label, #neigh .thumbnail-lg:hover .caption-label,
+#selection .thumbnail-lg:hover .caption-label { opacity: 1; }
 /* Gradio sizes the grid as `columns` x minmax(100px, 1fr), which overflows sideways in a narrow
    column. Fit as many columns as the width allows instead; extra thumbnails wrap downward. */
-#gallery .grid-container, #neigh .grid-container {
+#gallery .grid-container, #neigh .grid-container, #selection .grid-container {
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   grid-template-rows: none;
   grid-auto-rows: auto;
 }
 #cmp .grid-container { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: auto; }
-#gallery .grid-wrap, #neigh .grid-wrap, #cmp .grid-wrap { overflow-x: hidden; }
+#gallery .grid-wrap, #neigh .grid-wrap, #cmp .grid-wrap, #selection .grid-wrap { overflow-x: hidden; }
 .tile { border: 1px solid var(--border-color-primary); border-radius: 8px; padding: 10px 14px; min-width: 130px; }
 .tile .v { font-size: 22px; font-weight: 600; }
 .tile .l { font-size: 12px; opacity: .75; }
@@ -300,6 +310,7 @@ def build() -> gr.Blocks:
         name_saved = gr.BrowserState("", storage_key="audit_reviewer")
         page_items = gr.State([])
         cur_item = gr.State(None)
+        selected_items = gr.State([])
         neigh_rows = gr.State([])
 
         with gr.Row():
@@ -321,8 +332,8 @@ def build() -> gr.Blocks:
                 with gr.Row():
                     with gr.Column(scale=3):
                         with gr.Row():
-                            mode = gr.Radio(["Scan: click toggles ⚑", "Inspect: click opens"], value="Scan: click toggles ⚑",
-                                            show_label=False, scale=2)
+                            mode = gr.Radio(["Scan: click toggles ⚑", "Select: click toggles selection"],
+                                            value="Scan: click toggles ⚑", show_label=False, scale=2)
                             prev_page = gr.Button("◀ page", elem_id="btn-prev-page", size="sm", scale=0)
                             next_page = gr.Button("page ▶", elem_id="btn-next-page", size="sm", scale=0)
                             page_ok = gr.Button("✓ Mark rest of page OK → next", variant="primary", size="sm", scale=1)
@@ -333,21 +344,13 @@ def build() -> gr.Blocks:
                         gr.Markdown("Border = **your** verdict: <span style='color:#2ea043'>■ ok</span> "
                                     "<span style='color:#da3633'>■ flag</span> <span style='color:#8957e5'>■ wrong class</span> "
                                     "<span style='color:#3c3c3c'>■ drop</span> <span style='color:#e68c14'>■ unsure</span> · "
+                                    "<span style='background:#c4dfff;padding:1px 6px;border-radius:3px'>tinted</span> = "
+                                    "selected for bulk action · "
                                     "caption: 👥n others decided · ⚠ reviewers disagree · model:X model prefers X · ×n identical copies. "
-                                    "Keys: **1** ok · **2** wrong class · **3** drop · **4** unsure · **f** flag · **j/k** next/prev image · **n/p** page")
-                        with gr.Accordion("Class status (manual)", open=False):
-                            with gr.Row():
-                                status = gr.Radio(list(STATUSES), label="Status of this class", scale=2)
-                                status_note = gr.Textbox(label="Note", scale=2)
-                                status_save = gr.Button("Save status", scale=0)
-
-                    with gr.Column(scale=2):
-                        with gr.Row():
-                            big = gr.Image(show_label=False, height=220, interactive=False, scale=1)
-                            cmp = gr.Gallery(columns=3, height=220, allow_preview=False, show_label=False, scale=2, elem_id="cmp",
-                                             object_fit="contain", interactive=False)
-                        info = gr.Markdown("*Switch to **Inspect** and click an image.*")
-                        model_md = gr.Markdown()
+                                    "Keys: **1** ok · **2** wrong class · **3** drop · **4** unsure · **f** flag · "
+                                    "**j/k** inspect prev/next · **n/p** page")
+                        gr.Markdown("**Bulk action** — applies to every selected image at once (Select mode, click each thumbnail).")
+                        sel_count = gr.Markdown("**Selected: 0**")
                         with gr.Row():
                             b_ok = gr.Button("1 · OK", elem_id="btn-ok", variant="primary", size="sm")
                             b_drop = gr.Button("3 · Drop", elem_id="btn-drop", size="sm")
@@ -359,11 +362,29 @@ def build() -> gr.Blocks:
                             b_wrong = gr.Button("2 · Wrong class →", elem_id="btn-wrong", variant="stop", scale=1)
                         with gr.Row():
                             note = gr.Textbox(label="Note (optional, saved with the next verdict)", scale=3)
-                            advance = gr.Checkbox(True, label="Auto-advance", scale=1)
+                            b_clear_sel = gr.Button("Clear selection", scale=1)
+                        with gr.Accordion("Class status (manual)", open=False):
+                            with gr.Row():
+                                status = gr.Radio(list(STATUSES), label="Status of this class", scale=2)
+                                status_note = gr.Textbox(label="Note", scale=2)
+                                status_save = gr.Button("Save status", scale=0)
+
+                    with gr.Column(scale=2):
+                        with gr.Row():
+                            big = gr.Image(show_label=False, height=220, interactive=False, scale=1)
+                            cmp = gr.Gallery(columns=3, height=220, allow_preview=False, show_label=False, scale=2, elem_id="cmp",
+                                             object_fit="contain", interactive=False)
+                        info = gr.Markdown("*Switch to **Select** and click an image.*")
+                        model_md = gr.Markdown()
+                        decisions = gr.Markdown()
                         with gr.Row():
                             b_prev = gr.Button("◀ prev (k)", elem_id="btn-prev-item", size="sm")
                             b_next = gr.Button("next (j) ▶", elem_id="btn-next-item", size="sm")
-                        decisions = gr.Markdown()
+                        with gr.Accordion("Selected for bulk action", open=True):
+                            gr.Markdown("*What the bulk buttons on the left will act on — including the class "
+                                        "you're about to reassign to, for a visual check before you apply it.*")
+                            sel_gallery = gr.Gallery(columns=4, height="auto", allow_preview=False, show_label=False,
+                                                     elem_id="selection", object_fit="contain", interactive=False)
                         with gr.Accordion("Find similar images", open=True):
                             with gr.Row():
                                 signal = gr.Radio(["cnn", "pixel", "both"], value="cnn", label="Signal",
@@ -420,10 +441,15 @@ def build() -> gr.Blocks:
                 preview_table = gr.Dataframe(interactive=False, max_height=360)
 
         # ---------------- callbacks ----------------------------------------------------------------
-        page_inputs = [folder, order, filt, page, size, true_size, name]
+        page_inputs = [folder, order, filt, page, size, true_size, name, selected_items]
         page_outputs = [gallery, page_items, page, page_info, header]
         detail_outputs = [cur_item, big, info, model_md, decisions, proposed, cmp, neigh, neigh_rows, vote]
+        sel_outputs = [selected_items, sel_count, sel_gallery]
         sim_inputs = [signal, scope, k_nb, true_size, auto_sim]
+
+        def empty_detail():
+            big_, info_, model_, dec_, prop_, cmp_ = detail(None, "")
+            return None, big_, info_, model_, dec_, prop_, cmp_, [], [], ""
 
         def status_of(f):
             s = STORE.class_status().set_index("class_folder")
@@ -431,22 +457,30 @@ def build() -> gr.Blocks:
                 return s.loc[int(f), "status"], s.loc[int(f), "note"]
             return "not_started", ""
 
-        def new_class(f, o, fl, _page, sz, ts, nm, request: gr.Request):
-            return (*load_page(f, o, fl, 0, sz, ts, nm, request), *status_of(f))
+        def refresh_view(f, o, fl, _page, sz, ts, nm, sel, request: gr.Request):
+            """order/filter/size/true-size change: keep the current selection, just reload the page"""
+            return (*load_page(f, o, fl, 0, sz, ts, nm, sel, request), *status_of(f))
 
-        for ev in (folder.change, order.change, filt.change, size.release, true_size.change):
-            ev(new_class, page_inputs, [*page_outputs, status, status_note])
-        demo.load(lambda s: s, name_saved, name).then(new_class, page_inputs, [*page_outputs, status, status_note])
+        def new_class(f, o, fl, _page, sz, ts, nm, _sel, request: gr.Request):
+            """switching class drops the selection -- it belonged to a different set of images"""
+            page_out = load_page(f, o, fl, 0, sz, ts, nm, [], request)
+            return (*page_out, *status_of(f), [], "**Selected: 0**", [], *empty_detail())
+
+        for ev in (order.change, filt.change, size.release, true_size.change):
+            ev(refresh_view, page_inputs, [*page_outputs, status, status_note])
+        folder.change(new_class, page_inputs,
+                      [*page_outputs, status, status_note, *sel_outputs, *detail_outputs])
+        demo.load(lambda s: s, name_saved, name).then(refresh_view, page_inputs, [*page_outputs, status, status_note])
         name.change(lambda n: n, name, name_saved)
 
         def turn(delta):
-            def f(fo, o, fl, p, sz, ts, nm, request: gr.Request):
-                return load_page(fo, o, fl, p + delta, sz, ts, nm, request)
+            def f(fo, o, fl, p, sz, ts, nm, sel, request: gr.Request):
+                return load_page(fo, o, fl, p + delta, sz, ts, nm, sel, request)
             return f
         prev_page.click(turn(-1), page_inputs, page_outputs)
         next_page.click(turn(+1), page_inputs, page_outputs)
 
-        def page_all_ok(fo, o, fl, p, sz, ts, nm, items, request: gr.Request):
+        def page_all_ok(fo, o, fl, p, sz, ts, nm, sel, items, request: gr.Request):
             me = reviewer(nm, request)
             paths = ITEMS.path.iloc[items].tolist()
             decided = set(STORE.current(paths=paths).query("reviewer == @me").path)
@@ -456,46 +490,71 @@ def build() -> gr.Blocks:
             gr.Info(f"Marked {n} images OK")
             # a "not reviewed" filter has already dropped this page out of the list
             nxt = p if fl in ("not reviewed by me", "not reviewed by anyone") else p + 1
-            return load_page(fo, o, fl, nxt, sz, ts, nm, request)
+            return load_page(fo, o, fl, nxt, sz, ts, nm, sel, request)
         page_ok.click(page_all_ok, [*page_inputs, page_items], page_outputs)
 
-        def on_gallery(evt: gr.SelectData, md, items, nm, ts, sig, sc, n, ts2, auto, request: gr.Request):
+        def on_gallery(evt: gr.SelectData, md, items, selected, nm, ts, sig, sc, n, ts2, auto, prop,
+                       request: gr.Request):
             k = items[evt.index]
+            me = reviewer(nm, request, required=False)
             if md.startswith("Scan"):
                 me = reviewer(nm, request)
                 r = ITEMS.iloc[k]
                 mine = STORE.current(paths=[r.path]).query("reviewer == @me")
                 is_flag = len(mine) and mine.verdict.iloc[0] == "flag"
                 STORE.record(r.path, r.folder, me, "clear" if is_flag else "flag")
-                return render_gallery(items, me, ts), *([gr.skip()] * len(detail_outputs))
-            return gr.skip(), *open_item(k, nm, sig, sc, n, ts2, auto, request)
+                return (render_gallery(items, me, ts, set(selected)), gr.skip(), gr.skip(), gr.skip(),
+                        *([gr.skip()] * len(detail_outputs)))
+            # Select mode: clicking toggles the image in/out of the bulk selection; the item you
+            # just added (or, if you removed one, whichever is now last) becomes the anchor used
+            # by the compare strip and Find similar -- one image at a time, as before.
+            selected = list(selected)
+            if k in selected:
+                selected.remove(k)
+            else:
+                selected.append(k)
+            anchor = selected[-1] if selected else None
+            gal = render_gallery(items, me, ts, set(selected))
+            sel_gal = selection_panel(selected, me, ts2, prop)
+            return (gal, selected, f"**Selected: {len(selected)}**", sel_gal,
+                    *open_item(anchor, nm, sig, sc, n, ts2, auto, request))
         # every click counts while scanning fast: queue them rather than drop them, and don't
         # cover the grid with a progress overlay that swallows the next click
-        gallery.select(on_gallery, [mode, page_items, name, true_size, *sim_inputs], [gallery, *detail_outputs],
-                       trigger_mode="multiple", show_progress="hidden")
+        gallery.select(on_gallery, [mode, page_items, selected_items, name, true_size, *sim_inputs, proposed],
+                       [gallery, *sel_outputs, *detail_outputs], trigger_mode="multiple", show_progress="hidden")
 
-        def act(verdict):
-            def f(k, items, nm, prop, nt, adv, ts, sig, sc, n, ts2, auto, request: gr.Request):
+        def bulk_act(verdict):
+            def f(selected, items, nm, prop, nt, ts, request: gr.Request):
                 me = reviewer(nm, request)
-                if k is None:
-                    raise gr.Error("Open an image first (Inspect mode, then click it).")
-                r = ITEMS.iloc[int(k)]
-                if verdict == "wrong_class":
-                    if prop is None:
-                        raise gr.Error("Choose the correct class first.")
-                    if int(prop) == int(r.folder):
-                        raise gr.Error("That is the folder's own class — use OK instead.")
-                STORE.record(r.path, r.folder, me, verdict,
-                             int(prop) if verdict == "wrong_class" else None, nt if verdict != "clear" else "")
-                nxt = k
-                if adv and verdict != "clear" and k in items and items.index(k) + 1 < len(items):
-                    nxt = items[items.index(k) + 1]
-                return (render_gallery(items, me, ts), "", *open_item(nxt, nm, sig, sc, n, ts2, auto, request))
+                if not selected:
+                    raise gr.Error("Select at least one image first (Select mode, then click each thumbnail).")
+                rows, skipped = [], 0
+                for k in selected:
+                    r = ITEMS.iloc[int(k)]
+                    if verdict == "wrong_class":
+                        if prop is None:
+                            raise gr.Error("Choose the correct class first.")
+                        if int(prop) == int(r.folder):
+                            skipped += 1
+                            continue
+                    rows.append(dict(path=r.path, folder_class=int(r.folder), verdict=verdict,
+                                     proposed_class=int(prop) if verdict == "wrong_class" else None,
+                                     note=nt if verdict != "clear" else ""))
+                n = STORE.record_many(rows, me) if rows else 0
+                gr.Info(f"{verdict}: {n} image(s)"
+                        + (f", skipped {skipped} already in that class" if skipped else ""))
+                # the batch is now decided -- clear the selection for the next one
+                return render_gallery(items, me, ts, set()), "", [], "**Selected: 0**", [], *empty_detail()
             return f
-        act_inputs = [cur_item, page_items, name, proposed, note, advance, true_size, *sim_inputs]
+        bulk_inputs = [selected_items, page_items, name, proposed, note, true_size]
         for btn, v in ((b_ok, "ok"), (b_wrong, "wrong_class"), (b_drop, "drop"), (b_unsure, "unsure"),
                        (b_flag, "flag"), (b_clear, "clear")):
-            btn.click(act(v), act_inputs, [gallery, note, *detail_outputs])
+            btn.click(bulk_act(v), bulk_inputs, [gallery, note, *sel_outputs, *detail_outputs])
+
+        def clear_selection(items, nm, ts, request: gr.Request):
+            me = reviewer(nm, request, required=False)
+            return render_gallery(items, me, ts, set()), [], "**Selected: 0**", [], *empty_detail()
+        b_clear_sel.click(clear_selection, [page_items, name, true_size], [gallery, *sel_outputs, *detail_outputs])
 
         def step(delta):
             def f(k, items, nm, sig, sc, n, ts, auto, request: gr.Request):
@@ -511,7 +570,11 @@ def build() -> gr.Blocks:
         for c in (signal, scope):
             c.change(neighbours, [cur_item, signal, scope, k_nb, true_size], [neigh, neigh_rows, vote])
         k_nb.release(neighbours, [cur_item, signal, scope, k_nb, true_size], [neigh, neigh_rows, vote])
-        proposed.input(compare, [cur_item, proposed], cmp)
+
+        def on_proposed(k, prop, selected, nm, ts, request: gr.Request):
+            me = reviewer(nm, request, required=False)
+            return compare(k, prop), selection_panel(selected, me, ts, prop)
+        proposed.input(on_proposed, [cur_item, proposed, selected_items, name, true_size], [cmp, sel_gallery])
 
         def on_neigh(evt: gr.SelectData, rows, nm, sig, sc, n, ts, auto, request: gr.Request):
             return open_item(int(CAT.item_of_row[rows[evt.index]]), nm, sig, sc, n, ts, auto, request)
