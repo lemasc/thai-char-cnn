@@ -35,13 +35,15 @@ from .paths import CONFIGS, RUNS, SPLIT_DIR
 from .split import stable_hash
 
 DEFAULT_CONFIG = dict(
-    model="small_cnn", width=32, dropout=0.3, use_geometry=False, img_size=32, preprocess="letterbox",
+    model="small_cnn", width=32, dropout=0.3, use_geometry=False, img_size=32, preprocess="stretch",
     augment=False, sampler="none",
     epochs=40, batch_size=256, lr=3e-3, weight_decay=5e-4, warmup_epochs=1, label_smoothing=0.0,
     patience=8, seed=42, amp=True,
 )
 # not part of the run identity: they change speed, not results
 RUNTIME_KEYS = {"num_workers"}
+# optional experiment keys, absent from DEFAULT_CONFIG so runs that don't set them keep their identity
+OPTIONAL_KEYS = {"augment_file"}          # a file in configs/ to augment from instead of augment.json
 # modules whose source decides what a run produces; split logic is covered by split_id instead
 CODE_MODULES = ["augment", "data", "metrics", "model", "preprocess", "train"]
 
@@ -59,12 +61,17 @@ def current_split_id(split_dir: Path = SPLIT_DIR) -> str:
 
 def resolve_config(cfg: dict) -> dict:
     """Defaults + overrides, with the augmentation actually used spelled out so it is hashed."""
-    unknown = set(cfg) - set(DEFAULT_CONFIG) - RUNTIME_KEYS - {"name"}
+    unknown = set(cfg) - set(DEFAULT_CONFIG) - RUNTIME_KEYS - OPTIONAL_KEYS - {"name"}
     assert not unknown, f"unknown config keys {unknown}"
     out = DEFAULT_CONFIG | cfg
-    out["augment_params"] = augment_params(load_augment_config(CONFIGS / "augment.json")) if out["augment"] else None
+    assert out["augment"] or "augment_file" not in out, "augment_file needs augment=True"
+    out["augment_params"] = augment_params(load_augment_config(augment_path(out))) if out["augment"] else None
     out["code_hash"] = code_hash()
     return out
+
+
+def augment_path(cfg: dict) -> Path:
+    return CONFIGS / cfg.get("augment_file", "augment.json")
 
 
 def run_id(cfg: dict, split_id: str) -> str:
@@ -122,7 +129,9 @@ def fit(cfg: dict, split_id: str | None = None, runs_dir: Path = RUNS, split_dir
     validated = (classes.status == "validated").to_numpy()
 
     tr_idx, va_idx = data.idx["train"], data.idx["val"]
-    transform = build_train_transform(load_augment_config(CONFIGS / "augment.json")) if cfg["augment"] else None
+    assert (classes.class_idx.to_numpy() == np.arange(n_classes)).all(), "class_idx must be 0..n-1"
+    transform = (build_train_transform(load_augment_config(augment_path(cfg)), classes.character.tolist())
+                 if cfg["augment"] else None)
     sampler = make_sampler(data.y[tr_idx].numpy(), cfg["sampler"], cfg["seed"])
     workers = cfg.get("num_workers", min(8, os.cpu_count() or 1))
     loader = DataLoader(data.dataset("train", transform), batch_size=cfg["batch_size"],

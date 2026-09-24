@@ -1,0 +1,11 @@
+{
+  "note": "Tier geometry limits from augment.json, with blur, noise, and brightness/contrast disabled for every tier. This isolates the per-tier geometry proposed in reports/augmentation_tiers.md.",
+  "tiers": {"จ": [4], "ด": [4], "ต": [4], "ว": [5], "า": [5], "ใ": [5]},
+  "profiles": {
+    "tier1": {"blur_p": 0.0, "noise_p": 0.0, "photo_p": 0.0},
+    "tier2": {"blur_p": 0.0, "noise_p": 0.0, "photo_p": 0.0},
+    "tier3": {"blur_p": 0.0, "noise_p": 0.0, "photo_p": 0.0},
+    "tier4": {"blur_p": 0.0, "noise_p": 0.0, "photo_p": 0.0},
+    "tier5": {"blur_p": 0.0, "noise_p": 0.0, "photo_p": 0.0}
+  }
+}

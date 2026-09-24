@@ -158,10 +158,10 @@ Shared logic lives in `src/thai_char_cnn/review/`.
 | `class_labels.csv` | 02 | 03, 04 | Folder → Thai character |
 | `near_dup.json` | 02 | 01 | Near-duplicate RMS threshold |
 | `cross_class_rulings.csv` | 02 | 03 | Per exact cross-class SHA group: `reassign` to `correct_class`, or `hold` (excluded) |
-| `image_rulings.csv` | 02, audit app (optional) | 03 | Per image: `path, ruling, correct_class, source, note`, `ruling` ∈ `keep` / `reassign` / `drop`. Overrides group rulings; a missing file or row, or a blank `ruling`, means keep. Each writer replaces only its own rows (`source`); the audit app's are `audit_app` |
+| `image_rulings.csv` | 02 (optional) | 03 | Per image: `path, ruling, correct_class, source, note`, `ruling` ∈ `keep` / `reassign` / `drop`. Overrides group rulings; a missing file or row means keep |
 | `review_log.csv`, `review_class_status.csv` | audit app (on export) | people | The review DB's full decision log and class-status log, as CSV, so the reviews are tracked in git |
-| `split.json` | by hand | 03 | `unit` (`writer`, retained schema name for filename-group splitting), `val_fraction`, `min_val_class_images`, `seed`, `search_iters`, `unruled_cross_class` (`drop` or `keep`: what happens to an image in a near-dup group that still carries two labels after the rulings) |
-| `augment.json` | `05_augment_preview.py` (planned; optional) | 04 | Any `AugmentConfig` field (`rotation_deg`, `shear_deg`, `scale_min`, `scale_max`, `translate_frac`, `stroke_p`, `elastic_p`, `elastic_alpha`, `elastic_sigma`). Missing → conservative defaults, with stroke and elastic off |
+| `split.json` | by hand | 03 | `unit` (`writer`), `val_fraction`, `min_val_class_images`, `seed`, `search_iters`, `unruled_cross_class` (`drop` or `keep`: what happens to an image in a near-dup group that still carries two labels after the rulings) |
+| `augment.json` | `05_augment_preview.py` (planned; optional) | 04 | Overrides on the per-class augmentation tiers in `augment.py`: `profiles` (`{"tier2": {"rotation_deg": 4}}`, any `TierProfile` field), `tiers` (`{"ว": [2]}` replaces a character's tiers), `elastic_sigma_px`. Unknown keys are an error. Missing → the tier defaults (1 robust, 2 hook/loop pairs, 3 ascender/descender, 4 marks, 5 า/ๅ; a character in several tiers gets the most conservative value of each field). `uniform` (any `TierProfile` field) instead gives every class one Tier 1-based profile, no tiering; it can't be combined with `profiles` / `tiers`. An experiment can read another file in `configs/` with `augment_file` (e.g. `augment_uniform.json`, the tiering control) |
 
 ## Notes from the current `baseline` audit
 

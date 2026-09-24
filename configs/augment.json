@@ -1,0 +1,4 @@
+{
+  "note": "Tier overrides from confusion checks (3 seeds each); see reports/augmentation_tiers.md. Round 1: ว, จ moved Tier 1 -> 4 after Tier 1 augmentation sent clean val ว to า 426 times (baseline 68). Round 2: ด, ต -> Tier 4; ว -> Tier 5 with า. Round 3: ใ -> Tier 5 (ใ/า stayed above baseline in every augmented run).",
+  "tiers": {"จ": [4], "ด": [4], "ต": [4], "ว": [5], "า": [5], "ใ": [5]}
+}
