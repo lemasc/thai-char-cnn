@@ -10,6 +10,11 @@ main cue separating ่ from ๅ/า and ุ from ู.
 With weights, the stem's kernel is the ImageNet RGB kernel summed over its input channels, which is
 the same as feeding the grey image to all three. The ImageNet stem downsamples 4x, so it is meant
 for inputs of 64 px and up.
+
+`freeze_through` names the last ResNet stage to freeze (`"layer2"`, `"layer4"`), stem included; None
+fine-tunes everything. Frozen modules get no gradients and stay in eval mode during training, so their
+BatchNorm keeps the ImageNet running statistics instead of drifting to this data. `"layer4"` leaves only
+the head trainable (a linear probe on the pretrained features).
 """
 
 import torch
@@ -41,8 +46,12 @@ class SmallCNN(nn.Module):
         return self.head(h)
 
 
+RESNET_STAGES = ["layer1", "layer2", "layer3", "layer4"]
+
+
 class ResNet18(nn.Module):
-    def __init__(self, n_classes: int, pretrained: str | None = None, dropout: float = 0.3):
+    def __init__(self, n_classes: int, pretrained: str | None = None, dropout: float = 0.3,
+                 freeze_through: str | None = None):
         super().__init__()
         net = resnet18(weights=ResNet18_Weights[pretrained] if pretrained else None)
         rgb = net.conv1.weight.detach()
@@ -52,6 +61,18 @@ class ResNet18(nn.Module):
                 net.conv1.weight.copy_(rgb.sum(1, keepdim=True))
         net.fc = nn.Sequential(nn.Dropout(dropout), nn.Linear(net.fc.in_features, n_classes))
         self.net = net
+        self.frozen = []
+        if freeze_through:
+            stages = RESNET_STAGES[:RESNET_STAGES.index(freeze_through) + 1]
+            self.frozen = [net.conv1, net.bn1] + [getattr(net, s) for s in stages]
+            for m in self.frozen:
+                m.requires_grad_(False)
+
+    def train(self, mode: bool = True) -> "ResNet18":
+        super().train(mode)
+        for m in self.frozen:
+            m.eval()
+        return self
 
     def forward(self, x: torch.Tensor, geo: torch.Tensor | None = None) -> torch.Tensor:
         return self.net(x)
@@ -60,8 +81,11 @@ class ResNet18(nn.Module):
 def build_model(cfg: dict, n_classes: int) -> nn.Module:
     if cfg["model"] == "small_cnn":
         assert cfg["pretrained"] is None, "small_cnn has no pretrained weights"
+        assert cfg["freeze_through"] is None, "small_cnn has nothing to freeze"
         return SmallCNN(n_classes, width=cfg["width"], dropout=cfg["dropout"], use_geometry=cfg["use_geometry"])
     if cfg["model"] == "resnet18":
         assert not cfg["use_geometry"], "resnet18 does not take geometry features"
-        return ResNet18(n_classes, pretrained=cfg["pretrained"], dropout=cfg["dropout"])
+        assert cfg["pretrained"] or not cfg["freeze_through"], "freezing random weights needs pretrained"
+        return ResNet18(n_classes, pretrained=cfg["pretrained"], dropout=cfg["dropout"],
+                        freeze_through=cfg["freeze_through"])
     raise ValueError(f"unknown model {cfg['model']!r}")
