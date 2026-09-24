@@ -1,6 +1,6 @@
 {
   "dataset": "baseline",
-  "generated_at": "2026-09-23T09:25:32+00:00",
+  "generated_at": "2026-09-24T03:15:56+00:00",
   "versions": {
     "python": "3.12.3",
     "numpy": "2.5.3",
@@ -34,10 +34,10 @@
     "cross_class_near_dup_images": 40
   },
   "timings_s": {
-    "scan_s": 0.2,
-    "phash_sweep_s": 20.8,
+    "scan_s": 23.8,
+    "phash_sweep_s": 20.5,
     "pixel_sweep_s": 1.7,
-    "pair_tables_s": 19.7
+    "pair_tables_s": 19.6
   },
   "checks": {
     "every discovered image was scanned": "PASS",
