@@ -27,6 +27,12 @@ Never add `code_hash` or any other source hash back into the run id.
 a separate `runs_dir` for such arms, and leave `runs_dir` at its default for plain real-data arms so
 they reuse cached runs.
 
+## Frozen models (`models/`)
+
+`models/<experiment>/` holds the checked-in submission weights, written only by `04_train` with
+`FREEZE=1`. `05_submit` loads them without `runs/`, so they must not drift: don't refreeze unless the
+selected model should change, and never hand-edit `model.pt` (its sha256 is checked on load).
+
 ## Worktrees
 
 `runs/` in each git worktree is a symlink to the main checkout's `runs/`

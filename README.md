@@ -120,6 +120,23 @@ on the experiment named by `FOCUS`.
 `runs/` is gitignored. Each run holds `config.json`, `history.csv`, `metrics.json`,
 `per_class.csv`, `confusion.npy`, `val_predictions.csv`, `model.pt`.
 
+`FREEZE=1` copies the best seed of `stretch+augment` and `stretch` to `models/<experiment>/` (checked
+in): `model.pt` byte for byte, the class order, and a `meta.json` with the run id and sha256.
+
+### 5 · `notebooks/05_submit.ipynb` — test-set submission
+
+```bash
+uv run jupyter nbconvert --to notebook --execute --inplace notebooks/05_submit.ipynb
+MODEL=stretch TEST_ROOT=/path/to/unzipped uv run jupyter nbconvert --to notebook --execute --inplace notebooks/05_submit.ipynb
+```
+
+Predicts the hidden test set with a frozen model (default `stretch+augment`) or any run on this
+machine by id, and fills column `404` of the assignment's `Project_1-InputOutput.csv`. `gt_path` is
+resolved under `TEST_ROOT` (default `assets/test-challenge/`). Before predicting, it re-predicts the val
+set and checks that the accuracy matches the recorded one, which catches a preprocessing mismatch.
+Writes `submission/404_predictions.csv`, `404_column.txt` (paste into the sheet) and `404_detail.csv`
+(top-3 with probabilities).
+
 ### Audit app · `apps/audit.py` — shared image review
 
 ```bash

@@ -12,12 +12,16 @@ frozen copy holds three files:
 
 `04_train` freezes with `FREEZE=1`; `05_submit` predicts.
 
-Test images go through the same `data.load_image` as training (grey, `stretch` or `letterbox` to the
-run's `img_size`, geometry from the original size), then the run's train-only normalisation.
+Test images go through the same preprocessing as training (grey, `stretch` or `letterbox` to the
+run's `img_size`, geometry from the original size), then the run's train-only normalisation. One step
+is added: an image on a dark background (white ink on black, which training never shows) is inverted
+first. The rule needs at least 90% of the border near-black, so tight dark-on-white crops, whose ink
+often touches the border, are left alone: on val it inverts no image and changes no prediction.
 """
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -27,14 +31,34 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+from PIL import Image, ImageOps
 
-from .data import load_classes, load_image
+from .data import load_classes
 from .model import build_model
 from .paths import ROOT, RUNS, SPLIT_DIR
+from .preprocess import preprocess
 from .train import DEFAULT_CONFIG, current_split_id, load_runs
 
 MODELS = ROOT / "models"
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG")
+DARK, DARK_BORDER = 64, 0.9            # grey level counted as dark; share of the border that must be
+
+
+def dark_background(gray: np.ndarray) -> bool:
+    """True for white ink on a black background: nearly all of the border is dark."""
+    border = np.concatenate([gray[0], gray[-1], gray[:, 0], gray[:, -1]])
+    return min(gray.shape) >= 8 and (border < DARK).mean() >= DARK_BORDER
+
+
+def load_test_image(path: Path, size: int, mode: str) -> tuple[np.ndarray, tuple[float, float, float], bool]:
+    """`data.load_image`, plus inverting a dark-background image. -> pixels, geometry, inverted."""
+    with Image.open(path) as im:
+        gray = im.convert("L")
+    inverted = dark_background(np.asarray(gray))
+    if inverted:
+        gray = ImageOps.invert(gray)
+    w, h = gray.size
+    return preprocess(gray, size, mode), (np.log(w), np.log(h), w / h), inverted
 
 
 def sha256(path: Path) -> str:
@@ -120,11 +144,15 @@ class Predictor:
 
     @torch.no_grad()
     def predict(self, paths: list[Path], batch: int = 512) -> torch.Tensor:
-        """Softmax probabilities, (N, n_classes), computed the same way as `train.predict`."""
+        """Softmax probabilities, (N, n_classes), computed the same way as `train.predict`.
+
+        `self.inverted` is then a boolean array: which images were inverted first.
+        """
         size, mode = self.cfg["img_size"], self.cfg["preprocess"]
-        loaded = [load_image(p, size, mode) for p in paths]
-        pixels = torch.from_numpy(np.stack([px for px, _ in loaded])).unsqueeze(1)
-        geo = torch.tensor([g for _, g in loaded], dtype=torch.float32)
+        loaded = [load_test_image(p, size, mode) for p in paths]
+        pixels = torch.from_numpy(np.stack([px for px, _, _ in loaded])).unsqueeze(1)
+        geo = torch.tensor([g for _, g, _ in loaded], dtype=torch.float32)
+        self.inverted = np.array([inv for _, _, inv in loaded])
         self.model.eval()
         out = []
         for s in range(0, len(paths), batch):
@@ -176,8 +204,20 @@ def load_class_ids(data_dict: Path) -> dict[str, str]:
 
 
 def resolve_image(test_root: Path, gt_path: str) -> Path | None:
-    """`./test_dataset/ts_img_001` -> the file under `test_root`, with or without an image suffix."""
+    """`./test_dataset/ts_img_001` -> the file under `test_root`, with or without an image suffix.
+
+    The trailing number may be zero-padded differently on disk (the sheet says `ts_img_001`, the
+    released files are `ts_img_00001.jpg`), so it is matched by value when the exact name is missing.
+    """
     p = test_root / gt_path
     if p.is_file():
         return p
-    return next((p.with_name(p.name + s) for s in IMAGE_SUFFIXES if p.with_name(p.name + s).is_file()), None)
+    hit = next((p.with_name(p.name + s) for s in IMAGE_SUFFIXES if p.with_name(p.name + s).is_file()), None)
+    if hit is not None or not p.parent.is_dir():
+        return hit
+    m = re.fullmatch(r"(.*?)(\d+)", p.stem if p.suffix in IMAGE_SUFFIXES else p.name)
+    if m is None:
+        return None
+    prefix, num = m[1], int(m[2])
+    return next((f for f in sorted(p.parent.iterdir()) if f.suffix in IMAGE_SUFFIXES
+                 and (n := re.fullmatch(re.escape(prefix) + r"(\d+)", f.stem)) and int(n[1]) == num), None)

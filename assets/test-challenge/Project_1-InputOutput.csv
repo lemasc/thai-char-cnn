@@ -1,5 +1,5 @@
-gt_path,gt_label,gt_class_id,MAD,test,404,NPC,Wanorn,นิวเฟิ้ด <3,ปากกาของไบร์ท,Capybara,มหาเศรษฐี,ไก่ทอดน้ำปลา
-./test_dataset/ts_img_001,,1,,,,,,,,,,
-./test_dataset/ts_img_002,,1,,,,,,,,,,
-./test_dataset/ts_img_003,,1,,,,,,,,,,
-./test_dataset/ts_img_004,,1,,,,,,,,,,
+gt_path,gt_label,gt_class_id,404
+./test_dataset/ts_img_001,,1,
+./test_dataset/ts_img_002,,1,
+./test_dataset/ts_img_003,,1,
+./test_dataset/ts_img_004,,1,
