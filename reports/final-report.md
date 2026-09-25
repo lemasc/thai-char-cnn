@@ -59,8 +59,8 @@ With only three seeds, **a gap smaller than about 0.003 macro-F1 is within noise
 AdamW, weight decay 5e-4, batch size 256, one warm-up epoch, then cosine decay over up to 40 epochs.
 Early stopping has patience 8 on val macro-F1. No label smoothing, mixed precision on, RTX 3060.
 The small CNN uses 32 px input at `lr=3e-3`. ResNet-18 uses 64 px input at `lr=1e-3`, because its
-stem downsamples 4×. The ResNet stem is one channel; with ImageNet weights, the RGB kernel is summed
-over its three input channels.
+stem downsamples 4×. The ResNet stem takes one channel (see *Transfer learning* below for how it is
+initialised from ImageNet).
 
 - **`small_cnn`**: three blocks, each two 3×3 conv + BN + ReLU and a max-pool (32 → 64 → 128
   channels), then global average pooling, dropout 0.3 and a linear head. 296 k parameters.
@@ -69,6 +69,43 @@ over its three input channels.
   get the full range: rotation, shear, elastic distortion, stroke thickness, cutout, blur, noise and
   contrast. Confusable pairs, ascender/descender letters, marks and the า/ๅ pair get progressively
   gentler settings. See `reports/augmentation_tiers.md`.
+
+### Transfer learning
+
+Transfer learning reuses weights learned on a large dataset as the starting point for a new task,
+instead of starting from random values. The question here is whether features learned on ImageNet
+(1.28 M colour photos in 1,000 classes) help with single grey handwritten Thai glyphs, which look
+nothing like photos. Only ResNet-18 is tested, because the small CNN has no pretrained weights.
+
+**Loading the weights.** The ResNet-18 backbone starts from torchvision's `IMAGENET1K_V1` weights,
+and the 1,000-class ImageNet head is replaced with a new, randomly initialised head for the 72
+classes. ImageNet's first convolution expects three colour channels, but these images have one. The
+one-channel stem kernel is the sum of the three RGB kernels, which gives exactly the same output as
+feeding the grey image into all three channels. Inputs are 64 px, because the ImageNet stem
+downsamples 4× and a 32 px glyph would shrink to 8 × 8 before `layer1`. Pixels are normalised with
+this dataset's train mean and SD, not ImageNet's.
+
+**How much to reuse.** ResNet-18 is a stem followed by four stages (`layer1` to `layer4`). The early
+stages detect generic patterns such as edges and strokes, and the late stages detect larger shapes
+specific to what the network was trained on. Freezing a stage keeps its ImageNet weights fixed: it
+gets no gradients, and its BatchNorm layers stay in eval mode, so they keep the ImageNet running
+statistics. The experiments move the freeze point from nothing to the whole backbone:
+
+| Experiment | Initialisation | Frozen | Trained | Trainable params |
+| --- | --- | --- | --- | --- |
+| `resnet18@64` | random | nothing | everything | 11.2 M |
+| `resnet18-pretrained@64` | ImageNet | nothing (full fine-tune) | everything | 11.2 M |
+| `resnet18-pretrained-frozen-l2@64` | ImageNet | stem, `layer1`, `layer2` | `layer3`, `layer4`, head | 10.5 M |
+| `resnet18-pretrained-frozen@64` | ImageNet | whole backbone | linear head (linear probe) | 37 k |
+| `resnet18-pretrained-frozen+mlp@64` | ImageNet | whole backbone | MLP head, 512 hidden | 301 k |
+
+The random-init row is the baseline. Comparing it with full fine-tuning shows whether ImageNet is a
+better *starting point*. The frozen rows show how far ImageNet's *features* can go on their own.
+
+**Same recipe on purpose.** All five rows use the shared recipe above: `lr=1e-3`, the same tiered
+augmentation and the same 40-epoch schedule. Transfer learning is often run with a lower learning
+rate for the pretrained layers or longer training for frozen backbones. Neither was done here, so
+that the rows differ only in initialisation and in what is frozen. The results are in §3.4.
 
 ## 2 · Results
 
