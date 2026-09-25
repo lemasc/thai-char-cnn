@@ -1,0 +1,13 @@
+{
+  "experiment": "stretch+augment",
+  "run_id": "c80f69cf5af9",
+  "seed": 137,
+  "split_id": "d0a0d7ada85a",
+  "train_version": "1.p2",
+  "experiment_macro_f1_mean": 0.9894,
+  "experiment_macro_f1_sd": 0.0013,
+  "val_macro_f1": 0.9907018791143739,
+  "val_macro_f1_all": 0.9881853316459824,
+  "val_acc": 0.9891630543514505,
+  "best_epoch": 17
+}
