@@ -41,7 +41,7 @@ from .paths import CONFIGS, RUNS, SPLIT_DIR
 from .split import stable_hash
 
 DEFAULT_CONFIG = dict(
-    model="small_cnn", pretrained=None, freeze_through=None, width=32, dropout=0.3, use_geometry=False, img_size=32, preprocess="stretch",
+    model="small_cnn", pretrained=None, freeze_through=None, mlp_hidden=None, width=32, dropout=0.3, use_geometry=False, img_size=32, preprocess="stretch",
     augment=False, sampler="none",
     epochs=40, batch_size=256, lr=3e-3, weight_decay=5e-4, warmup_epochs=1, label_smoothing=0.0,
     patience=8, seed=42, amp=True,
@@ -52,7 +52,7 @@ RUNTIME_KEYS = {"num_workers"}
 OPTIONAL_KEYS = {"augment_file"}          # a file in configs/ to augment from instead of augment.json
 # keys added after runs existed: left out of the run identity while at this value, so adding a key
 # with a behaviour-preserving default keeps every earlier run's id
-IDENTITY_NEUTRAL: dict = dict(pretrained=None, freeze_through=None)
+IDENTITY_NEUTRAL: dict = dict(pretrained=None, freeze_through=None, mlp_hidden=None)
 # part of the run identity; see the module docstring for when to change it
 TRAIN_VERSION = "1"
 # provenance only (recorded, not hashed); split logic is covered by split_id instead

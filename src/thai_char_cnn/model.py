@@ -15,6 +15,11 @@ for inputs of 64 px and up.
 fine-tunes everything. Frozen modules get no gradients and stay in eval mode during training, so their
 BatchNorm keeps the ImageNet running statistics instead of drifting to this data. `"layer4"` leaves only
 the head trainable (a linear probe on the pretrained features).
+
+`mlp_hidden` swaps either model's linear head for an MLP classifier on the pooled features: dropout,
+then per hidden width `Linear -> BatchNorm1d -> ReLU -> Dropout`, then the output layer. None keeps the
+single linear layer. With `freeze_through="layer4"` it gives a frozen feature extractor with a trained
+MLP classifier on top.
 """
 
 import torch
@@ -29,15 +34,23 @@ def _block(c_in: int, c_out: int) -> nn.Sequential:
         nn.MaxPool2d(2))
 
 
+def _head(n_in: int, n_classes: int, dropout: float, mlp_hidden: list[int] | None = None) -> nn.Sequential:
+    layers: list[nn.Module] = [nn.Dropout(dropout)]
+    for h in mlp_hidden or []:
+        layers += [nn.Linear(n_in, h), nn.BatchNorm1d(h), nn.ReLU(inplace=True), nn.Dropout(dropout)]
+        n_in = h
+    return nn.Sequential(*layers, nn.Linear(n_in, n_classes))
+
+
 class SmallCNN(nn.Module):
     def __init__(self, n_classes: int, width: int = 32, dropout: float = 0.3,
-                 use_geometry: bool = False, n_geo: int = 3):
+                 use_geometry: bool = False, n_geo: int = 3, mlp_hidden: list[int] | None = None):
         super().__init__()
         self.use_geometry = use_geometry
         self.features = nn.Sequential(_block(1, width), _block(width, 2 * width), _block(2 * width, 4 * width),
                                       nn.AdaptiveAvgPool2d(1), nn.Flatten())
         self.geo = nn.Sequential(nn.Linear(n_geo, 16), nn.ReLU(inplace=True)) if use_geometry else None
-        self.head = nn.Sequential(nn.Dropout(dropout), nn.Linear(4 * width + (16 if use_geometry else 0), n_classes))
+        self.head = _head(4 * width + (16 if use_geometry else 0), n_classes, dropout, mlp_hidden)
 
     def forward(self, x: torch.Tensor, geo: torch.Tensor | None = None) -> torch.Tensor:
         h = self.features(x)
@@ -51,7 +64,7 @@ RESNET_STAGES = ["layer1", "layer2", "layer3", "layer4"]
 
 class ResNet18(nn.Module):
     def __init__(self, n_classes: int, pretrained: str | None = None, dropout: float = 0.3,
-                 freeze_through: str | None = None):
+                 freeze_through: str | None = None, mlp_hidden: list[int] | None = None):
         super().__init__()
         net = resnet18(weights=ResNet18_Weights[pretrained] if pretrained else None)
         rgb = net.conv1.weight.detach()
@@ -59,7 +72,7 @@ class ResNet18(nn.Module):
         if pretrained:
             with torch.no_grad():
                 net.conv1.weight.copy_(rgb.sum(1, keepdim=True))
-        net.fc = nn.Sequential(nn.Dropout(dropout), nn.Linear(net.fc.in_features, n_classes))
+        net.fc = _head(net.fc.in_features, n_classes, dropout, mlp_hidden)
         self.net = net
         self.frozen = []
         if freeze_through:
@@ -82,10 +95,11 @@ def build_model(cfg: dict, n_classes: int) -> nn.Module:
     if cfg["model"] == "small_cnn":
         assert cfg["pretrained"] is None, "small_cnn has no pretrained weights"
         assert cfg["freeze_through"] is None, "small_cnn has nothing to freeze"
-        return SmallCNN(n_classes, width=cfg["width"], dropout=cfg["dropout"], use_geometry=cfg["use_geometry"])
+        return SmallCNN(n_classes, width=cfg["width"], dropout=cfg["dropout"], use_geometry=cfg["use_geometry"],
+                        mlp_hidden=cfg["mlp_hidden"])
     if cfg["model"] == "resnet18":
         assert not cfg["use_geometry"], "resnet18 does not take geometry features"
         assert cfg["pretrained"] or not cfg["freeze_through"], "freezing random weights needs pretrained"
         return ResNet18(n_classes, pretrained=cfg["pretrained"], dropout=cfg["dropout"],
-                        freeze_through=cfg["freeze_through"])
+                        freeze_through=cfg["freeze_through"], mlp_hidden=cfg["mlp_hidden"])
     raise ValueError(f"unknown model {cfg['model']!r}")

@@ -78,3 +78,23 @@ tiered augmentation and `lr=1e-3`. The three rows share this recipe and differ o
 All three rows stay in the notebook for the report. None of them beats the from-scratch
 `resnet18@64` or `small_cnn` rows from the ResNet comparison on the previous code (0.985–0.991). Those
 rows haven't been retrained on this code yet, so the ranking waits for that rerun.
+
+## 2026-09-25 · CNN + MLP: an MLP classifier on the pooled features
+
+Split `d0a0d7ada85a`, train version `1.p2`. Each `+mlp` row repeats a row above with the single linear
+head replaced by `mlp_hidden` (dropout, then `Linear -> BatchNorm1d -> ReLU -> Dropout`, then the output
+layer); everything else is the same recipe.
+
+| Experiment | Hidden | Macro-F1 | Compared with (linear head) | Δ |
+| --- | --- | --- | --- | --- |
+| stretch+augment+mlp | 256 | 0.9889 ± 0.0018 | stretch+augment 0.9894 ± 0.0013 | −0.0005 |
+| resnet18@64+mlp | 512 | 0.9894 ± 0.0014 | resnet18@64 0.9884 ± 0.0029 | +0.0010 |
+| resnet18-pretrained-frozen+mlp@64 | 512 | 0.8905 ± 0.0082 | resnet18-pretrained-frozen@64 0.8561 ± 0.0025 | +0.0344 |
+
+- **End to end, the MLP head changes nothing.** Both gaps are inside the seed spread. When the
+  convolutional layers are trained, they already make the pooled features linearly separable, so an
+  extra nonlinear layer on top has nothing left to fix.
+- **Separating the jobs, with a frozen ImageNet extractor and a trained MLP classifier, recovers only a
+  quarter of the probe's gap.** It is +0.034 over the linear probe but still about 0.10 below every
+  model whose convolutional layers were trained. The features, not the classifier, are what's missing.
+  It was still improving at the end (best epoch 36 of 40), so it is a lower bound, as with the probe.
