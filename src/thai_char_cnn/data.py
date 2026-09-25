@@ -29,6 +29,14 @@ def load_classes(split_dir=SPLIT_DIR) -> pd.DataFrame:
     return pd.read_csv(split_dir / "classes.csv", keep_default_na=False).sort_values("class_idx")
 
 
+def load_image(path, size: int, mode: str = "stretch") -> tuple[np.ndarray, tuple[float, float, float]]:
+    """One image file -> model input (size, size) uint8 and its geometry (log w, log h, w/h)."""
+    with Image.open(path) as im:
+        gray = im.convert("L")
+    w, h = gray.size
+    return preprocess(gray, size, mode), (np.log(w), np.log(h), w / h)
+
+
 def decode(paths: list[str], size: int, mode: str = "stretch", raw=RAW, cache=CACHE) -> tuple[np.ndarray, np.ndarray]:
     """-> pixels (N, size, size) uint8, geometry (N, 3) float32 = log w, log h, w/h."""
     key = stable_hash(dict(paths=paths, size=size, mode=mode, v=PREPROCESS_VERSION))
@@ -39,11 +47,7 @@ def decode(paths: list[str], size: int, mode: str = "stretch", raw=RAW, cache=CA
     pixels = np.empty((len(paths), size, size), np.uint8)
     geo = np.empty((len(paths), N_GEO), np.float32)
     for i, p in enumerate(paths):
-        with Image.open(raw / p) as im:
-            gray = im.convert("L")
-        w, h = gray.size
-        pixels[i] = preprocess(gray, size, mode)
-        geo[i] = (np.log(w), np.log(h), w / h)
+        pixels[i], geo[i] = load_image(raw / p, size, mode)
     cache.mkdir(parents=True, exist_ok=True)
     np.savez(f, pixels=pixels, geo=geo)
     return pixels, geo

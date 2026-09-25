@@ -1,0 +1,20 @@
+{
+  "experiment": "stretch+augment",
+  "run_id": "c80f69cf5af9",
+  "seed": 137,
+  "split_id": "d0a0d7ada85a",
+  "train_version": "1.p2",
+  "code_hash": "fdba95a2a0a6",
+  "model": "small_cnn",
+  "img_size": 32,
+  "preprocess": "stretch",
+  "epochs": 40,
+  "val_macro_f1": 0.9907018791143739,
+  "val_macro_f1_all": 0.9881853316459824,
+  "val_acc": 0.9891630543514505,
+  "best_epoch": 17,
+  "n_params": 296168,
+  "sha256": "9120e6f9c4d328482230b95feaafd30d229c341115904d9a6a68dd6d7e353315",
+  "git_commit": "1891db350f7f9e7ae9a24eb10d09b9b7eadbd282",
+  "frozen_at": "2026-09-25T12:50:55+0700"
+}

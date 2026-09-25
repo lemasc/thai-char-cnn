@@ -25,3 +25,6 @@ runs
 
 # gradio runtime cache (apps/audit.py)
 .gradio/
+
+# hidden test images from the instructor (not ours to redistribute)
+assets/test-challenge/test_dataset/
