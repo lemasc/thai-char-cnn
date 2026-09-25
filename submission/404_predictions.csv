@@ -1,8 +1,8 @@
 ﻿gt_path,gt_label,gt_class_id,404
-./test_dataset/ts_img_001,,1,101
-./test_dataset/ts_img_002,,1,102
-./test_dataset/ts_img_003,,1,102
-./test_dataset/ts_img_004,,1,104
+./test_dataset/ts_img_00001,,,101
+./test_dataset/ts_img_00002,,,102
+./test_dataset/ts_img_00003,,,102
+./test_dataset/ts_img_00004,,,104
 ./test_dataset/ts_img_00005,,,105
 ./test_dataset/ts_img_00006,,,106
 ./test_dataset/ts_img_00007,,,107
