@@ -98,3 +98,26 @@ layer); everything else is the same recipe.
   quarter of the probe's gap.** It is +0.034 over the linear probe but still about 0.10 below every
   model whose convolutional layers were trained. The features, not the classifier, are what's missing.
   It was still improving at the end (best epoch 36 of 40), so it is a lower bound, as with the probe.
+
+## 2026-09-25 · Pruned to four rows before merging
+
+Split `d0a0d7ada85a`, train version `1.p2`. Results for every row, retired or kept, are compared in
+`reports/final-report.md`, which lists the run ids.
+
+Kept: `stretch+augment` (the recommended model), `stretch` (its no-augmentation control; the two
+are still tied at 0.9894 vs 0.9889), `resnet18@64` and `resnet18-pretrained@64` (the reference points
+for any future backbone). The deep dive now focuses on `stretch+augment`.
+
+| Retired | Macro-F1 | Why retired |
+| --- | --- | --- |
+| letterbox | 0.9858 ± 0.0022 | Stretch wins on every seed, on this split and the pre-audit one |
+| resnet18-pretrained-frozen-l2@64 | 0.9870 ± 0.0004 | Freezing through `layer2` costs nothing, but saves only 6% of trainable parameters |
+| resnet18-pretrained-frozen@64 | 0.8561 ± 0.0025 | A frozen ImageNet backbone is 0.13 below any trained one |
+| resnet18-pretrained-frozen+mlp@64 | 0.8905 ± 0.0082 | An MLP recovers only a quarter of the frozen backbone's gap |
+| stretch+augment+mlp | 0.9889 ± 0.0018 | MLP head is within noise of the linear head (−0.0005) |
+| resnet18@64+mlp | 0.9894 ± 0.0014 | Ties for first, but within noise of `resnet18@64` (+0.0010) |
+
+- The ranking that the transfer-learning entry above left open is settled: on this code, the
+  from-scratch `resnet18@64` (0.9884 ± 0.0029) and `small_cnn` rows tie, and none of the pretrained
+  rows beats them.
+- Open at retirement: letterbox was only tested on `small_cnn`, never on ResNet-18 at 64 px.
